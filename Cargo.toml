@@ -7,7 +7,9 @@ authors = ["eyemotif"]
 
 [dependencies]
 reqwest = { version = "0.11.14", features = ["rustls-tls-webpki-roots"] }
+ring = { version = "0.16.20", features = ["std"] }
 rustls = "0.20.8"
 tiny_http = "0.12.0"
 tokio = { version = "1.25.0", features = ["rt-multi-thread", "macros", "io-std", "time", "fs", "sync"] }
+urlencoding = "2.1.2"
 webpki-roots = "0.22.6"
