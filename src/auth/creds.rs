@@ -6,10 +6,4 @@ pub struct Credentials {
 }
 
 #[derive(Debug, Clone)]
-pub struct OAuthToken(pub(super) String);
-
-impl OAuthToken {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
+pub struct OAuthToken(pub String);
