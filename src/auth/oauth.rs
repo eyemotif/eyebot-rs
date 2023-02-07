@@ -5,15 +5,15 @@ use std::error::Error;
 use tiny_http::{Response, StatusCode};
 use tokio::task::JoinHandle;
 
-type ClientJoinHandle = JoinHandle<Result<OAuthToken, OAuthClientError>>;
+type ClientResult = std::result::Result<OAuthToken, OAuthClientError>;
 
 #[derive(Debug)]
 pub struct OAuthClient {
-    join_handle: ClientJoinHandle,
+    join_handle: JoinHandle<ClientResult>,
 }
 
 #[derive(Debug)]
-pub struct OAuthClientOptions {
+pub struct OAuthClientData {
     pub client_id: String,
     pub host_address: String,
     pub response_path: String,
@@ -22,36 +22,36 @@ pub struct OAuthClientOptions {
 
 #[derive(Debug)]
 pub enum OAuthClientError {
-    ServerError(Box<dyn Error + Send + Sync>),
-    ReceiveError(std::io::Error),
-    RespondError(std::io::Error),
-    AuthError {
+    OnServerCreate(Box<dyn Error + Send + Sync>),
+    OnReceive(std::io::Error),
+    OnResponse(std::io::Error),
+    OnAuth {
         error: String,
         error_description: String,
     },
-    RandError(ring::error::Unspecified),
+    Ring(ring::error::Unspecified),
 }
 
 impl OAuthClient {
-    pub fn start_auth(options: OAuthClientOptions) -> Self {
+    pub fn start_auth(options: OAuthClientData) -> Self {
         let join_handle = tokio::spawn(OAuthClient::host_auth(options));
         OAuthClient { join_handle }
     }
-    pub fn into_inner(self) -> ClientJoinHandle {
+    pub fn into_inner(self) -> JoinHandle<ClientResult> {
         self.join_handle
     }
 
-    async fn host_auth(options: OAuthClientOptions) -> Result<OAuthToken, OAuthClientError> {
+    async fn host_auth(options: OAuthClientData) -> ClientResult {
         let server = tiny_http::Server::http(&options.host_address)
-            .map_err(OAuthClientError::ServerError)?;
+            .map_err(OAuthClientError::OnServerCreate)?;
         let rand = ring::rand::SystemRandom::new();
         let mut current_state = None;
 
         // https://docs.rs/ring/latest/ring/rand/struct.SystemRandom.html
-        rand.fill(&mut []).map_err(OAuthClientError::RandError)?;
+        rand.fill(&mut []).map_err(OAuthClientError::Ring)?;
 
         loop {
-            let request = server.recv().map_err(OAuthClientError::ReceiveError)?;
+            let request = server.recv().map_err(OAuthClientError::OnReceive)?;
 
             match request.url() {
                 "/" => {
@@ -61,7 +61,7 @@ impl OAuthClient {
                         &options.scopes,
                         &rand,
                     )
-                    .map_err(OAuthClientError::RandError)?;
+                    .map_err(OAuthClientError::Ring)?;
 
                     current_state = Some(new_state);
 
@@ -76,54 +76,54 @@ impl OAuthClient {
                 response if response.starts_with(&options.response_path) => {
                     let (_, response) = response.split_once('?').unwrap();
                     let Some(params) = OAuthClient::parse_url_params(response) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     };
 
                     let (Some(code), Some(state)) = (params.get("code"), params.get("state")) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     };
                     let Some(current_state) = &current_state else {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     };
                     if current_state != state {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     }
 
-                    request.respond(OAuthClient::code(200, "Success!")).map_err(OAuthClientError::RespondError)?;
+                    request.respond(OAuthClient::code(200, "Success!")).map_err(OAuthClientError::OnResponse)?;
                     return Ok(OAuthToken(String::from(code)));
                 }
                 error if error.starts_with("/?error") => {
                     let Some(params) = OAuthClient::parse_url_params(&error[2..]) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     };
 
                     let (Some(error), Some(error_description), Some(state)) = (params.get("error"), params.get("error_description"), params.get("state")) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     };
                     let Some(current_state) = &current_state else {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     };
                     if current_state != state {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::RespondError)?;
+                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
                         continue;
                     }
 
-                    request.respond(OAuthClient::code(500, "Twitch error.")).map_err(OAuthClientError::RespondError)?;
-                    return Err(OAuthClientError::AuthError {
+                    request.respond(OAuthClient::code(500, "Twitch error.")).map_err(OAuthClientError::OnResponse)?;
+                    return Err(OAuthClientError::OnAuth {
                         error: String::from(error),
                         error_description: error_description.replace('+', " "),
                     });
                 }
                 _ => request.respond(OAuthClient::code(404, "Not found.")),
             }
-            .map_err(OAuthClientError::RespondError)?
+            .map_err(OAuthClientError::OnResponse)?
         }
     }
 
@@ -149,7 +149,16 @@ impl OAuthClient {
         let mut buf = [0; 32];
         rng.fill(&mut buf)?;
         let state = buf.into_iter().map(|byte| format!("{:x?}", byte)).collect();
-        Ok((format!("https://id.twitch.tv/oauth2/authorize?response_type=code&force_verify=true&client_id={client_id}&redirect_uri={response_url}&state={state}&scope={}", urlencoding::encode(&scopes.join(" "))), state))
+        Ok((
+            // cargo fmt doesn't format huge strings
+            String::from(
+                "https://id.twitch.tv/oauth2/authorize?response_type=code&force_verify=true&",
+            ) + &format!(
+                "client_id={client_id}&redirect_uri={response_url}&state={state}&scope={}",
+                urlencoding::encode(&scopes.join(" "))
+            ),
+            state,
+        ))
     }
 
     fn parse_url_params(params: &str) -> Option<HashMap<String, String>> {
