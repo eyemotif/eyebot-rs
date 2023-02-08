@@ -148,7 +148,7 @@ impl OAuthClient {
     ) -> Result<(String, String), ring::error::Unspecified> {
         let mut buf = [0; 32];
         rng.fill(&mut buf)?;
-        let state = buf.into_iter().map(|byte| format!("{:x?}", byte)).collect();
+        let state = buf.into_iter().map(|byte| format!("{byte:x?}")).collect();
         Ok((
             // cargo fmt doesn't format huge strings
             String::from(

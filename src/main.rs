@@ -48,7 +48,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             ExitCode::FAILURE
         }
     }

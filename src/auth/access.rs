@@ -1,7 +1,6 @@
 use super::creds::{Credentials, OAuthToken};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use std::any::TypeId;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
@@ -87,10 +86,12 @@ impl AccessTokenManager {
     }
 
     pub async fn validate(&self) -> Result<bool, AccessTokenManagerError> {
-        let creds = self.creds.read().unwrap();
         let response = reqwest::Client::new()
             .get("https://id.twitch.tv/oauth2/validate")
-            .header("Authorization", format!("OAuth {}", creds.access_token))
+            .header(
+                "Authorization",
+                format!("OAuth {}", self.creds.read().unwrap().access_token),
+            )
             .send()
             .await
             .map_err(AccessTokenManagerError::Net)?
@@ -119,13 +120,14 @@ impl AccessTokenManager {
     }
 
     pub async fn refresh(&self) -> Result<(), AccessTokenManagerError> {
-        let mut creds = self.creds.write().unwrap();
         let response = reqwest::Client::new()
             .post(
                 String::from("https://id.twitch.tv/oauth2/token?grant_type=refresh_token")
                     + &format!(
                         "refresh_token={}&client_id={}&client_secret={}",
-                        creds.refresh_token, self.client_id, self.client_secret
+                        self.creds.read().unwrap().refresh_token,
+                        self.client_id,
+                        self.client_secret
                     ),
             )
             .send()
@@ -139,6 +141,7 @@ impl AccessTokenManager {
             AccessTokenManagerError::OnRefresh,
         )?;
 
+        let mut creds = self.creds.write().unwrap();
         creds.access_token = response.access_token;
         creds.refresh_token = response.refresh_token;
 
@@ -165,9 +168,9 @@ impl AccessTokenManager {
         data: &str,
         major_err: impl FnOnce(TwitchError) -> AccessTokenManagerError,
     ) -> Result<T, AccessTokenManagerError> {
-        match serde_json::from_str(&data) {
+        match serde_json::from_str(data) {
             Ok(data) => Ok(data),
-            Err(err) => match serde_json::from_str::<TwitchError>(&data) {
+            Err(err) => match serde_json::from_str::<TwitchError>(data) {
                 Ok(err) => Err(major_err(err)),
                 Err(_) => Err(AccessTokenManagerError::BadData(err)),
             },
