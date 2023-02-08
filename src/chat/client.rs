@@ -6,11 +6,13 @@ use tokio_stream::StreamExt;
 #[derive(Debug)]
 pub struct ChatClient {
     client: Client,
+    stream: irc::client::ClientStream,
+    data: super::data::ChatClientData,
 }
 
 impl ChatClient {
     pub async fn new(data: super::data::ChatClientData) -> Result<Self, ChatClientError> {
-        let client = Client::from_config(irc::client::prelude::Config {
+        let mut client = Client::from_config(irc::client::prelude::Config {
             owners: vec![String::from("eyebot-rs")],
             nickname: Some(data.bot_username.clone()),
             username: Some(data.bot_username.clone()),
@@ -32,11 +34,18 @@ impl ChatClient {
         )))?;
         client.send(Command::NICK(data.bot_username.clone()))?;
 
-        Ok(ChatClient { client })
+        Ok(ChatClient {
+            data,
+            stream: client.stream()?,
+            client,
+        })
     }
 
     pub async fn handle_messages(self) -> Result<(), ChatClientError> {
-        self.handle_auth_messages().await?;
+        self.handle_auth_messages()
+            .await?
+            .handle_join_messages()
+            .await?;
 
         Ok(())
     }
@@ -54,11 +63,9 @@ impl ChatClient {
             endofmotd: bool,
             globaluserstate: bool,
         }
-
-        let mut stream = self.client.stream()?;
         let mut memory = Memory::default();
 
-        while let Some(message) = stream.next().await.transpose()? {
+        while let Some(message) = self.stream.next().await.transpose()? {
             match message.command {
                 Command::NOTICE(_, message) => return Err(ChatClientError::AuthError(message)),
                 Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
@@ -99,5 +106,56 @@ impl ChatClient {
         }
 
         Err(ChatClientError::AuthIncomplete)
+    }
+    async fn handle_join_messages(mut self) -> Result<Self, ChatClientError> {
+        self.client.send(Command::JOIN(
+            format!("#{}", self.data.chat_channel),
+            None,
+            None,
+        ))?;
+
+        #[derive(Default)]
+        struct Memory {
+            join: bool,
+            namreply: bool,
+            endofnames: bool,
+            userstate: bool,
+            roomstate: bool,
+        }
+        let mut memory = Memory::default();
+
+        while let Some(message) = self.stream.next().await.transpose()? {
+            match message.command {
+                Command::NOTICE(_, message) => return Err(ChatClientError::JoinError(message)),
+                Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
+                Command::PONG(_, _) => (),
+
+                Command::JOIN(_, _, _) => memory.join = true,
+
+                Command::Response(response, _) => match response {
+                    Response::RPL_NAMREPLY => memory.namreply = true,
+                    Response::RPL_ENDOFNAMES => memory.endofnames = true,
+
+                    _ => return Err(ChatClientError::JoinUnrecognized(message)),
+                },
+
+                // TODO: handle states
+                Command::Raw(comm, _) if comm == "USERSTATE" => memory.userstate = true,
+                Command::Raw(comm, _) if comm == "ROOMSTATE" => memory.roomstate = true,
+
+                _ => return Err(ChatClientError::JoinUnrecognized(message)),
+            }
+
+            if memory.join
+                && memory.namreply
+                && memory.endofnames
+                && memory.userstate
+                && memory.roomstate
+            {
+                return Ok(self);
+            }
+        }
+
+        Err(ChatClientError::JoinIncomplete)
     }
 }

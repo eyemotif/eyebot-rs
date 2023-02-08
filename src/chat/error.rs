@@ -2,9 +2,14 @@
 pub enum ChatClientError {
     Irc(irc::error::Error),
     Access(crate::auth::access::AccessTokenManagerError),
+
     AuthIncomplete,
     AuthError(String),
     AuthUnrecognized(irc::proto::Message),
+
+    JoinIncomplete,
+    JoinError(String),
+    JoinUnrecognized(irc::proto::Message),
 }
 
 impl std::fmt::Display for ChatClientError {
@@ -24,6 +29,16 @@ impl std::fmt::Display for ChatClientError {
             }
             ChatClientError::AuthUnrecognized(message) => f.write_fmt(format_args!(
                 "Chat Auth: Unknown message {}.",
+                message.to_string().trim()
+            )),
+            ChatClientError::JoinIncomplete => f.write_str(
+                "Chat Join error: Twitch closed the connection before all info could be received.",
+            ),
+            ChatClientError::JoinError(error) => {
+                f.write_fmt(format_args!("Chat Join error: {error}."))
+            }
+            ChatClientError::JoinUnrecognized(message) => f.write_fmt(format_args!(
+                "Chat Join: Unknown message {}.",
                 message.to_string().trim()
             )),
         }
