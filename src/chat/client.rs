@@ -1,14 +1,14 @@
-use super::error::ChatConnectionError;
+use super::error::ChatClientError;
 use irc::client::Client;
 use irc::proto::Command;
 
 #[derive(Debug)]
-pub struct ChatConnection {
+pub struct ChatClient {
     client: Client,
 }
 
-impl ChatConnection {
-    pub async fn new(data: super::data::ChatConnectionData) -> Result<Self, ChatConnectionError> {
+impl ChatClient {
+    pub async fn new(data: super::data::ChatClientData) -> Result<Self, ChatClientError> {
         let client = Client::from_config(irc::client::prelude::Config {
             owners: vec![String::from("eyebot-rs")],
             nickname: Some(data.bot_username.clone()),
@@ -31,9 +31,9 @@ impl ChatConnection {
         )))?;
         client.send(Command::NICK(data.bot_username.clone()))?;
 
-        Ok(ChatConnection { client: client })
+        Ok(ChatClient { client: client })
     }
-    pub async fn handle_messages(self) -> Result<(), ChatConnectionError> {
+    pub async fn handle_messages(self) -> Result<(), ChatClientError> {
         todo!()
     }
 }
