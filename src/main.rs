@@ -44,7 +44,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         chat_channel: String::from("eye_motif"),
     })
     .await?;
-    chat_client.handle_messages().await?;
+    chat_client.run().await?;
 
     Ok(())
 }

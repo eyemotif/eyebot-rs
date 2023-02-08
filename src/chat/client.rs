@@ -20,19 +20,6 @@ impl ChatClient {
             ..Default::default()
         })
         .await?;
-        client.send(Command::CAP(
-            None,
-            irc::proto::CapSubCommand::REQ,
-            None,
-            Some(String::from(
-                "twitch.tv/membership twitch.tv/tags twitch.tv/commands",
-            )),
-        ))?;
-        client.send(Command::PASS(format!(
-            "oauth:{}",
-            data.access.get_credentials().await?.access_token
-        )))?;
-        client.send(Command::NICK(data.bot_username.clone()))?;
 
         Ok(ChatClient {
             data,
@@ -41,7 +28,7 @@ impl ChatClient {
         })
     }
 
-    pub async fn handle_messages(self) -> Result<(), ChatClientError> {
+    pub async fn run(self) -> Result<(), ChatClientError> {
         self.handle_auth_messages()
             .await?
             .handle_join_messages()
@@ -51,6 +38,21 @@ impl ChatClient {
     }
 
     async fn handle_auth_messages(mut self) -> Result<Self, ChatClientError> {
+        self.client.send(Command::CAP(
+            None,
+            irc::proto::CapSubCommand::REQ,
+            None,
+            Some(String::from(
+                "twitch.tv/membership twitch.tv/tags twitch.tv/commands",
+            )),
+        ))?;
+        self.client.send(Command::PASS(format!(
+            "oauth:{}",
+            self.data.access.get_credentials().await?.access_token
+        )))?;
+        self.client
+            .send(Command::NICK(self.data.bot_username.clone()))?;
+
         #[derive(Default)]
         struct Memory {
             ack: bool,
