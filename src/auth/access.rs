@@ -1,4 +1,5 @@
-use super::creds::{Credentials, OAuthToken};
+use super::creds::Credentials;
+use super::AccessTokenManagerData;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::sync::{Arc, RwLock};
@@ -8,14 +9,6 @@ pub struct AccessTokenManager {
     creds: Arc<RwLock<Credentials>>,
     client_id: Arc<String>,
     client_secret: Arc<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AccessTokenManagerData {
-    pub oauth: OAuthToken,
-    pub client_id: String,
-    pub client_secret: String,
-    pub redirect_url: String,
 }
 
 #[derive(Debug)]

@@ -1,4 +1,5 @@
 use super::creds::OAuthToken;
+use super::OAuthClientData;
 use ring::rand::SecureRandom;
 use std::collections::HashMap;
 use std::error::Error;
@@ -10,14 +11,6 @@ type ClientResult = std::result::Result<OAuthToken, OAuthClientError>;
 #[derive(Debug)]
 pub struct OAuthClient {
     join_handle: JoinHandle<ClientResult>,
-}
-
-#[derive(Debug)]
-pub struct OAuthClientData {
-    pub client_id: String,
-    pub host_address: String,
-    pub response_path: String,
-    pub scopes: Vec<String>,
 }
 
 #[derive(Debug)]

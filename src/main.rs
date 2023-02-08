@@ -1,9 +1,9 @@
+use auth::OAuthToken;
+use clap::Parser;
 use std::process::ExitCode;
 
-use auth::creds::OAuthToken;
-use clap::Parser;
-
 pub mod auth;
+mod chat;
 mod cli;
 
 #[tokio::main]
@@ -14,7 +14,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(oauth) => OAuthToken(oauth),
         None => {
             println!("No OAuth provided. Starting server...");
-            let auth = auth::oauth::OAuthClient::start_auth(auth::oauth::OAuthClientData {
+            let auth = auth::oauth::OAuthClient::start_auth(auth::OAuthClientData {
                 client_id: args.clientid.clone(),
                 scopes: Vec::new(), // TODO: add scopes
                 host_address: String::from("localhost:3000"),
@@ -27,14 +27,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let token_manager =
-        auth::access::AccessTokenManager::new(auth::access::AccessTokenManagerData {
-            oauth,
-            client_id: args.clientid.clone(),
-            client_secret: args.clientsecret.clone(),
-            redirect_url: String::from("http://localhost:3000"),
-        })
-        .await?;
+    let token_manager = auth::access::AccessTokenManager::new(auth::AccessTokenManagerData {
+        oauth,
+        client_id: args.clientid.clone(),
+        client_secret: args.clientsecret.clone(),
+        redirect_url: String::from("http://localhost:3000"),
+    })
+    .await?;
 
     println!(
         "Access granted: {:?}",
