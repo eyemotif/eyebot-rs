@@ -16,7 +16,7 @@ pub struct AccessTokenManagerData {
     pub redirect_url: String,
 }
 #[derive(Debug)]
-pub struct OAuthClientData {
+pub struct OAuthServerData {
     pub client_id: String,
     pub host_address: String,
     pub response_path: String,

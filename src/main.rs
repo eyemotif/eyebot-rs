@@ -14,7 +14,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(oauth) => OAuthToken(oauth),
         None => {
             println!("No OAuth provided. Starting server...");
-            let auth = auth::oauth::OAuthClient::start_auth(auth::OAuthClientData {
+            let auth = auth::oauth::OAuthServer::start_auth(auth::OAuthServerData {
                 client_id: args.clientid.clone(),
                 scopes: Vec::new(), // TODO: add scopes
                 host_address: String::from("localhost:3000"),

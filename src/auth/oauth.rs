@@ -1,20 +1,20 @@
 use super::creds::OAuthToken;
-use super::OAuthClientData;
+use super::OAuthServerData;
 use ring::rand::SecureRandom;
 use std::collections::HashMap;
 use std::error::Error;
 use tiny_http::{Response, StatusCode};
 use tokio::task::JoinHandle;
 
-type ClientResult = std::result::Result<OAuthToken, OAuthClientError>;
+type ClientResult = std::result::Result<OAuthToken, OAuthServerError>;
 
 #[derive(Debug)]
-pub struct OAuthClient {
+pub struct OAuthServer {
     join_handle: JoinHandle<ClientResult>,
 }
 
 #[derive(Debug)]
-pub enum OAuthClientError {
+pub enum OAuthServerError {
     OnServerCreate(Box<dyn Error + Send + Sync>),
     OnReceive(std::io::Error),
     OnResponse(std::io::Error),
@@ -25,36 +25,36 @@ pub enum OAuthClientError {
     Ring(ring::error::Unspecified),
 }
 
-impl OAuthClient {
-    pub fn start_auth(options: OAuthClientData) -> Self {
-        let join_handle = tokio::spawn(OAuthClient::host_auth(options));
-        OAuthClient { join_handle }
+impl OAuthServer {
+    pub fn start_auth(options: OAuthServerData) -> Self {
+        let join_handle = tokio::spawn(OAuthServer::host_auth(options));
+        OAuthServer { join_handle }
     }
     pub fn into_inner(self) -> JoinHandle<ClientResult> {
         self.join_handle
     }
 
-    async fn host_auth(options: OAuthClientData) -> ClientResult {
+    async fn host_auth(options: OAuthServerData) -> ClientResult {
         let server = tiny_http::Server::http(&options.host_address)
-            .map_err(OAuthClientError::OnServerCreate)?;
+            .map_err(OAuthServerError::OnServerCreate)?;
         let rand = ring::rand::SystemRandom::new();
         let mut current_state = None;
 
         // https://docs.rs/ring/latest/ring/rand/struct.SystemRandom.html
-        rand.fill(&mut []).map_err(OAuthClientError::Ring)?;
+        rand.fill(&mut []).map_err(OAuthServerError::Ring)?;
 
         loop {
-            let request = server.recv().map_err(OAuthClientError::OnReceive)?;
+            let request = server.recv().map_err(OAuthServerError::OnReceive)?;
 
             match request.url() {
                 "/" => {
-                    let (url, new_state) = OAuthClient::oauth_redirect_link(
+                    let (url, new_state) = OAuthServer::oauth_redirect_link(
                         &options.client_id,
                         &format!("http://{}{}", options.host_address, options.response_path),
                         &options.scopes,
                         &rand,
                     )
-                    .map_err(OAuthClientError::Ring)?;
+                    .map_err(OAuthServerError::Ring)?;
 
                     current_state = Some(new_state);
 
@@ -68,55 +68,55 @@ impl OAuthClient {
                 }
                 response if response.starts_with(&options.response_path) => {
                     let (_, response) = response.split_once('?').unwrap();
-                    let Some(params) = OAuthClient::parse_url_params(response) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
+                    let Some(params) = OAuthServer::parse_url_params(response) else {
+                        request.respond(OAuthServer::code(400, "Invalid response.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     };
 
                     let (Some(code), Some(state)) = (params.get("code"), params.get("state")) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
+                        request.respond(OAuthServer::code(400, "Invalid response.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     };
                     let Some(current_state) = &current_state else {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
+                        request.respond(OAuthServer::code(403, "Invalid state.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     };
                     if current_state != state {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
+                        request.respond(OAuthServer::code(403, "Invalid state.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     }
 
-                    request.respond(OAuthClient::code(200, "Success!")).map_err(OAuthClientError::OnResponse)?;
+                    request.respond(OAuthServer::code(200, "Success!")).map_err(OAuthServerError::OnResponse)?;
                     return Ok(OAuthToken(String::from(code)));
                 }
                 error if error.starts_with("/?error") => {
-                    let Some(params) = OAuthClient::parse_url_params(&error[2..]) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
+                    let Some(params) = OAuthServer::parse_url_params(&error[2..]) else {
+                        request.respond(OAuthServer::code(400, "Invalid response.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     };
 
                     let (Some(error), Some(error_description), Some(state)) = (params.get("error"), params.get("error_description"), params.get("state")) else {
-                        request.respond(OAuthClient::code(400, "Invalid response.")).map_err(OAuthClientError::OnResponse)?;
+                        request.respond(OAuthServer::code(400, "Invalid response.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     };
                     let Some(current_state) = &current_state else {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
+                        request.respond(OAuthServer::code(403, "Invalid state.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     };
                     if current_state != state {
-                        request.respond(OAuthClient::code(403, "Invalid state.")).map_err(OAuthClientError::OnResponse)?;
+                        request.respond(OAuthServer::code(403, "Invalid state.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
                     }
 
-                    request.respond(OAuthClient::code(500, "Twitch error.")).map_err(OAuthClientError::OnResponse)?;
-                    return Err(OAuthClientError::OnAuth {
+                    request.respond(OAuthServer::code(500, "Twitch error.")).map_err(OAuthServerError::OnResponse)?;
+                    return Err(OAuthServerError::OnAuth {
                         error: String::from(error),
                         error_description: error_description.replace('+', " "),
                     });
                 }
-                _ => request.respond(OAuthClient::code(404, "Not found.")),
+                _ => request.respond(OAuthServer::code(404, "Not found.")),
             }
-            .map_err(OAuthClientError::OnResponse)?
+            .map_err(OAuthServerError::OnResponse)?
         }
     }
 
@@ -163,28 +163,28 @@ impl OAuthClient {
     }
 }
 
-impl std::fmt::Display for OAuthClientError {
+impl std::fmt::Display for OAuthServerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OAuthClientError::OnServerCreate(err) => f.write_fmt(format_args!(
+            OAuthServerError::OnServerCreate(err) => f.write_fmt(format_args!(
                 "Error while creating the authentification server: {err}"
             )),
-            OAuthClientError::OnReceive(err) => f.write_fmt(format_args!(
+            OAuthServerError::OnReceive(err) => f.write_fmt(format_args!(
                 "Error while trying to receive a request to the server: {err}"
             )),
-            OAuthClientError::OnResponse(err) => f.write_fmt(format_args!(
+            OAuthServerError::OnResponse(err) => f.write_fmt(format_args!(
                 "Error while trying to send a response from the server: {err}"
             )),
-            OAuthClientError::OnAuth {
+            OAuthServerError::OnAuth {
                 error,
                 error_description,
             } => f.write_fmt(format_args!(
                 "Error {error} while validating the user's credentials: {error_description}"
             )),
-            OAuthClientError::Ring(err) => {
+            OAuthServerError::Ring(err) => {
                 f.write_fmt(format_args!("Error while creating random data: {err}"))
             }
         }
     }
 }
-impl std::error::Error for OAuthClientError {}
+impl std::error::Error for OAuthServerError {}
