@@ -174,3 +174,33 @@ impl AccessTokenManager {
         }
     }
 }
+
+impl std::fmt::Display for AccessTokenManagerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccessTokenManagerError::Net(err) => {
+                f.write_fmt(format_args!("Error sending a request to Twitch: {err}"))
+            }
+
+            AccessTokenManagerError::BadData(err) => {
+                f.write_fmt(format_args!("Error parsing a response from Twitch: {err}"))
+            }
+            AccessTokenManagerError::OnRequest(err) => f.write_fmt(format_args!(
+                "Error {} requesting an Access Token from Twitch: {}",
+                err.status, err.message
+            )),
+            AccessTokenManagerError::OnValidate(err) => f.write_fmt(format_args!(
+                "Error {} validating an Access Token: {}",
+                err.status, err.message
+            )),
+            AccessTokenManagerError::OnRefresh(err) => f.write_fmt(format_args!(
+                "Error {} requesting an Access Token from Twitch: {}",
+                err.status, err.message
+            )),
+            AccessTokenManagerError::InvalidValidateResponse => f.write_str(
+                "The Client Id given in a token validation did not match the given Client Id.",
+            ),
+        }
+    }
+}
+impl std::error::Error for AccessTokenManagerError {}

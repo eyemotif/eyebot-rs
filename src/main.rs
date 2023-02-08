@@ -1,3 +1,5 @@
+use std::process::ExitCode;
+
 use auth::creds::OAuthToken;
 use clap::Parser;
 
@@ -5,13 +7,13 @@ pub mod auth;
 mod cli;
 
 #[tokio::main]
-async fn main() {
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = cli::Cli::parse();
 
     let oauth = match args.oauth {
         Some(oauth) => OAuthToken(oauth),
         None => {
-            println!("No OAuth provided, starting server...");
+            println!("No OAuth provided. Starting server...");
             let auth = auth::oauth::OAuthClient::start_auth(auth::oauth::OAuthClientData {
                 client_id: args.clientid.clone(),
                 scopes: Vec::new(), // TODO: add scopes
@@ -19,37 +21,35 @@ async fn main() {
                 response_path: String::from("/response"),
             });
 
-            match auth.into_inner().await.unwrap() {
-                Ok(token) => {
-                    println!("Server closed.\nGot OAuth token: {}", token.0);
-                    token
-                }
-                Err(err) => {
-                    eprintln!("Error while getting OAuth token: {err:?}");
-                    return;
-                }
-            }
+            let oauth = auth.into_inner().await.unwrap()?;
+            println!("Success! Server closed.");
+            oauth
         }
     };
 
     let token_manager =
-        match auth::access::AccessTokenManager::new(auth::access::AccessTokenManagerData {
+        auth::access::AccessTokenManager::new(auth::access::AccessTokenManagerData {
             oauth,
             client_id: args.clientid.clone(),
             client_secret: args.clientsecret.clone(),
             redirect_url: String::from("http://localhost:3000"),
         })
-        .await
-        {
-            Ok(manager) => manager,
-            Err(err) => {
-                eprintln!("Error while getting an access token: {err:?}");
-                return;
-            }
-        };
+        .await?;
 
     println!(
         "Access granted: {:?}",
         token_manager.get_credentials().await
-    )
+    );
+
+    Ok(())
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("{}", err);
+            ExitCode::FAILURE
+        }
+    }
 }

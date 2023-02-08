@@ -169,3 +169,29 @@ impl OAuthClient {
             .collect()
     }
 }
+
+impl std::fmt::Display for OAuthClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OAuthClientError::OnServerCreate(err) => f.write_fmt(format_args!(
+                "Error while creating the authentification server: {err}"
+            )),
+            OAuthClientError::OnReceive(err) => f.write_fmt(format_args!(
+                "Error while trying to receive a request to the server: {err}"
+            )),
+            OAuthClientError::OnResponse(err) => f.write_fmt(format_args!(
+                "Error while trying to send a response from the server: {err}"
+            )),
+            OAuthClientError::OnAuth {
+                error,
+                error_description,
+            } => f.write_fmt(format_args!(
+                "Error {error} while validating the user's credentials: {error_description}"
+            )),
+            OAuthClientError::Ring(err) => {
+                f.write_fmt(format_args!("Error while creating random data: {err}"))
+            }
+        }
+    }
+}
+impl std::error::Error for OAuthClientError {}
