@@ -144,12 +144,12 @@ impl OAuthClient {
         let state = buf.into_iter().map(|byte| format!("{byte:x?}")).collect();
         Ok((
             // cargo fmt doesn't format huge strings
-            String::from(
-                "https://id.twitch.tv/oauth2/authorize?response_type=code&force_verify=true&",
-            ) + &format!(
-                "client_id={client_id}&redirect_uri={response_url}&state={state}&scope={}",
-                urlencoding::encode(&scopes.join(" "))
-            ),
+            // TODO: force_verify option
+            String::from("https://id.twitch.tv/oauth2/authorize?response_type=code=&")
+                + &format!(
+                    "client_id={client_id}&redirect_uri={response_url}&state={state}&scope={}",
+                    urlencoding::encode(&scopes.join(" "))
+                ),
             state,
         ))
     }

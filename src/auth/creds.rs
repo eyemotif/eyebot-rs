@@ -8,7 +8,7 @@ pub struct Credentials {
 #[derive(Debug, Clone)]
 pub struct OAuthToken(pub String);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AccessTokenManagerData {
     pub oauth: OAuthToken,
     pub client_id: String,

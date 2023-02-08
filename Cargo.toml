@@ -7,6 +7,7 @@ authors = ["eyemotif"]
 
 [dependencies]
 clap = { version = "4.1.4", features = ["derive"] }
+irc = "0.15.0"
 reqwest = { version = "0.11.14", features = ["rustls-tls-webpki-roots"] }
 ring = { version = "0.16.20", features = ["std"] }
 rustls = "0.20.8"
