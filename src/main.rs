@@ -44,6 +44,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         chat_channel: String::from("eye_motif"),
     })
     .await?;
+    tokio::spawn(chat_client.on_chat(|message| async move {
+        if message.message == "!ping" {
+            message.say("Pong!");
+        }
+    }));
     chat_client.run().await?;
 
     Ok(())

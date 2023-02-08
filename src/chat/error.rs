@@ -10,6 +10,8 @@ pub enum ChatClientError {
     JoinIncomplete,
     JoinError(String),
     JoinUnrecognized(irc::proto::Message),
+
+    ChatUnrecognized(irc::proto::Message),
 }
 
 impl std::fmt::Display for ChatClientError {
@@ -39,6 +41,10 @@ impl std::fmt::Display for ChatClientError {
             }
             ChatClientError::JoinUnrecognized(message) => f.write_fmt(format_args!(
                 "Chat Join: Unknown message {}.",
+                message.to_string().trim()
+            )),
+            ChatClientError::ChatUnrecognized(message) => f.write_fmt(format_args!(
+                "Chat: Unknown message {}.",
                 message.to_string().trim()
             )),
         }

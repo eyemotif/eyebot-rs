@@ -1,13 +1,18 @@
+use super::data::ChatMessage;
 use super::error::ChatClientError;
 use irc::client::Client;
 use irc::proto::{Command, Response};
+use std::future::Future;
+use std::sync::Arc;
+use tokio::sync::watch;
 use tokio_stream::StreamExt;
 
 #[derive(Debug)]
 pub struct ChatClient {
-    client: Client,
+    client: Arc<Client>,
     stream: irc::client::ClientStream,
     data: super::data::ChatClientData,
+    sender: watch::Sender<ChatMessage>,
 }
 
 impl ChatClient {
@@ -20,21 +25,67 @@ impl ChatClient {
             ..Default::default()
         })
         .await?;
+        let stream = client.stream()?;
+        let client = Arc::new(client);
 
         Ok(ChatClient {
+            sender: watch::channel(ChatMessage {
+                client: client.clone(),
+                channel: String::new(),
+                message: String::new(),
+            })
+            .0,
             data,
-            stream: client.stream()?,
+            stream,
             client,
         })
     }
 
+    pub fn on_chat<Fut: Future>(
+        &self,
+        mut f: impl FnMut(ChatMessage) -> Fut,
+    ) -> impl Future<Output = ()> {
+        let mut receiver = self.sender.subscribe();
+        async move {
+            while receiver.changed().await.is_ok() {
+                let chat_message = receiver.borrow().clone();
+                f(chat_message).await;
+            }
+        }
+    }
     pub async fn run(self) -> Result<(), ChatClientError> {
         self.handle_auth_messages()
             .await?
             .handle_join_messages()
+            .await?
+            .handle_chat_messages()
             .await?;
 
         Ok(())
+    }
+
+    async fn handle_chat_messages(mut self) -> Result<(), ChatClientError> {
+        while let Some(message) = self.stream.next().await.transpose()? {
+            match message.command {
+                Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
+                Command::PONG(_, _) => (),
+
+                Command::PRIVMSG(_, message) => {
+                    // TODO: stop sending on error
+                    let _ = self.sender.send(ChatMessage {
+                        client: self.client.clone(),
+                        channel: self.data.chat_channel.clone(),
+                        message,
+                    });
+                }
+
+                Command::Raw(comm, _) if comm == "USERSTATE" => (),
+
+                // _ => println!("unknown message: {:?}", message.command),
+                _ => return Err(ChatClientError::ChatUnrecognized(message)),
+            }
+        }
+        unreachable!("Chat connection closed")
     }
 
     async fn handle_auth_messages(mut self) -> Result<Self, ChatClientError> {
