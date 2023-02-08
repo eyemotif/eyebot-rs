@@ -35,10 +35,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
 
-    println!(
-        "Access granted: {:?}",
-        token_manager.get_credentials().await
-    );
+    let chat_client = chat::client::ChatClient::new(chat::data::ChatClientData {
+        access: token_manager,
+        bot_username: String::from("eye___bot"),
+        chat_channel: String::from("eye_motif"),
+    })
+    .await?;
+    chat_client.handle_messages().await?;
 
     Ok(())
 }

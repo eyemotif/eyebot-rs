@@ -1,6 +1,7 @@
 use super::error::ChatClientError;
 use irc::client::Client;
 use irc::proto::Command;
+use tokio_stream::StreamExt;
 
 #[derive(Debug)]
 pub struct ChatClient {
@@ -31,9 +32,14 @@ impl ChatClient {
         )))?;
         client.send(Command::NICK(data.bot_username.clone()))?;
 
-        Ok(ChatClient { client: client })
+        Ok(ChatClient { client })
     }
-    pub async fn handle_messages(self) -> Result<(), ChatClientError> {
-        todo!()
+    pub async fn handle_messages(mut self) -> Result<(), ChatClientError> {
+        let mut stream = self.client.stream()?;
+        while let Some(message) = stream.next().await.transpose()? {
+            println!(">> {message}");
+        }
+
+        Err(ChatClientError::JoinIncomplete)
     }
 }

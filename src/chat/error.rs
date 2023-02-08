@@ -2,6 +2,7 @@
 pub enum ChatClientError {
     Irc(irc::error::Error),
     Access(crate::auth::access::AccessTokenManagerError),
+    JoinIncomplete,
 }
 
 impl std::fmt::Display for ChatClientError {
