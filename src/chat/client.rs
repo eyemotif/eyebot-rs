@@ -1,6 +1,6 @@
 use super::error::ChatClientError;
 use irc::client::Client;
-use irc::proto::Command;
+use irc::proto::{Command, Response};
 use tokio_stream::StreamExt;
 
 #[derive(Debug)]
@@ -34,12 +34,70 @@ impl ChatClient {
 
         Ok(ChatClient { client })
     }
-    pub async fn handle_messages(mut self) -> Result<(), ChatClientError> {
-        let mut stream = self.client.stream()?;
-        while let Some(message) = stream.next().await.transpose()? {
-            println!(">> {message}");
+
+    pub async fn handle_messages(self) -> Result<(), ChatClientError> {
+        self.handle_auth_messages().await?;
+
+        Ok(())
+    }
+
+    async fn handle_auth_messages(mut self) -> Result<Self, ChatClientError> {
+        #[derive(Default)]
+        struct Memory {
+            ack: bool,
+            welcome: bool,
+            yourhost: bool,
+            created: bool,
+            myinfo: bool,
+            motdstart: bool,
+            motd: bool,
+            endofmotd: bool,
+            globaluserstate: bool,
         }
 
-        Err(ChatClientError::JoinIncomplete)
+        let mut stream = self.client.stream()?;
+        let mut memory = Memory::default();
+
+        while let Some(message) = stream.next().await.transpose()? {
+            match message.command {
+                Command::NOTICE(_, message) => return Err(ChatClientError::AuthError(message)),
+                Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
+                Command::PONG(_, _) => (),
+
+                Command::CAP(Some(_), irc::proto::CapSubCommand::ACK, Some(_), None) => {
+                    memory.ack = true;
+                }
+                Command::Response(response, _) => match response {
+                    Response::RPL_WELCOME => memory.welcome = true,
+                    Response::RPL_YOURHOST => memory.yourhost = true,
+                    Response::RPL_CREATED => memory.created = true,
+                    Response::RPL_MYINFO => memory.myinfo = true,
+                    Response::RPL_MOTDSTART => memory.motdstart = true,
+                    Response::RPL_MOTD => memory.motd = true,
+                    Response::RPL_ENDOFMOTD => memory.endofmotd = true,
+                    _ => return Err(ChatClientError::AuthUnrecognized(message)),
+                },
+
+                // TODO: handle states
+                Command::Raw(comm, _) if comm == "GLOBALUSERSTATE" => memory.globaluserstate = true,
+
+                _ => return Err(ChatClientError::AuthUnrecognized(message)),
+            }
+
+            if memory.ack
+                && memory.welcome
+                && memory.yourhost
+                && memory.created
+                && memory.myinfo
+                && memory.motdstart
+                && memory.motd
+                && memory.endofmotd
+                && memory.globaluserstate
+            {
+                return Ok(self);
+            }
+        }
+
+        Err(ChatClientError::AuthIncomplete)
     }
 }

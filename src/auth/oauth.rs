@@ -73,6 +73,11 @@ impl OAuthServer {
                         continue;
                     };
 
+                    if let (Some(error), Some(error_description)) = (params.get("error"), params.get("error_description")) {
+                        request.respond(OAuthServer::code(500, "Twitch error.")).map_err(OAuthServerError::OnResponse)?;
+                        return Err(OAuthServerError::OnAuth { error: error.clone(), error_description: error_description.replace('+', " ") });
+                    }
+
                     let (Some(code), Some(state)) = (params.get("code"), params.get("state")) else {
                         request.respond(OAuthServer::code(400, "Invalid response.")).map_err(OAuthServerError::OnResponse)?;
                         continue;
@@ -145,7 +150,7 @@ impl OAuthServer {
         Ok((
             // cargo fmt doesn't format huge strings
             // TODO: force_verify option
-            String::from("https://id.twitch.tv/oauth2/authorize?response_type=code=&")
+            String::from("https://id.twitch.tv/oauth2/authorize?response_type=code&")
                 + &format!(
                     "client_id={client_id}&redirect_uri={response_url}&state={state}&scope={}",
                     urlencoding::encode(&scopes.join(" "))
