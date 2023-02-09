@@ -3,7 +3,7 @@ use super::error::ChatClientError;
 use irc::client::Client;
 use irc::proto::message::Tag;
 use irc::proto::{Command, Response};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -15,6 +15,7 @@ pub struct ChatClient {
     stream: irc::client::ClientStream,
     data: super::data::ChatClientData,
     sender: watch::Sender<ChatMessage>,
+    joined_users: HashSet<String>,
 }
 
 impl ChatClient {
@@ -35,6 +36,7 @@ impl ChatClient {
             data,
             stream,
             client,
+            joined_users: HashSet::new(),
         })
     }
 
@@ -110,11 +112,21 @@ impl ChatClient {
                     let username = message
                         .prefix
                         .expect("The JOIN command always has a prefix");
-                    let _username = match username {
+                    let username = match username {
                         irc::proto::Prefix::Nickname(_, username, _) => username,
                         _ => unreachable!("The JOIN prefix is always Prefix::Nickname"),
                     };
-                    // TODO: handle JOIN
+                    self.joined_users.insert(username);
+                }
+                Command::PART(_, _) => {
+                    let username = message
+                        .prefix
+                        .expect("The PART command always has a prefix");
+                    let username = match username {
+                        irc::proto::Prefix::Nickname(_, username, _) => username,
+                        _ => unreachable!("The PART prefix is always Prefix::Nickname"),
+                    };
+                    self.joined_users.remove(&username);
                 }
 
                 // TODO: handle states
