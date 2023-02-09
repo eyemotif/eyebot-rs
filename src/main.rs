@@ -22,7 +22,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .await
         {
             Ok(manager) => Some(manager),
-            Err(auth::access::AccessTokenManagerError::InvalidTokens) => None,
+            Err(auth::error::AccessTokenManagerError::InvalidTokens) => None,
             Err(err) => return Err(err.into()),
         };
 
@@ -66,7 +66,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 async fn run_oauth_server(
     oauth: Option<String>,
     client_id: String,
-) -> Result<OAuthToken, auth::oauth::OAuthServerError> {
+) -> Result<OAuthToken, auth::error::OAuthServerError> {
     match oauth {
         Some(oauth) => Ok(OAuthToken(oauth)),
         None => {

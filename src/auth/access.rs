@@ -1,4 +1,5 @@
 use super::creds::Credentials;
+use super::error::{AccessTokenManagerError, TwitchError};
 use super::{AccessTokenManagerOAuth, AccessTokenManagerTokens};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -11,25 +12,6 @@ pub struct AccessTokenManager {
     client_id: Arc<String>,
     client_secret: Arc<String>,
     token_store: PathBuf,
-}
-
-#[derive(Debug)]
-pub enum AccessTokenManagerError {
-    Net(reqwest::Error),
-    BadData(serde_json::Error),
-    OnRequest(TwitchError),
-    OnValidate(TwitchError),
-    OnRefresh(TwitchError),
-    InvalidValidateResponse,
-    InvalidTokens,
-    IO(std::io::Error),
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TwitchError {
-    pub error: Option<String>,
-    pub status: u16,
-    pub message: String,
 }
 
 #[derive(Debug, Deserialize)]

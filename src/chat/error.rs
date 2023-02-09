@@ -1,7 +1,7 @@
 #[derive(Debug)]
 pub enum ChatClientError {
     Irc(irc::error::Error),
-    Access(crate::auth::access::AccessTokenManagerError),
+    Access(crate::auth::error::AccessTokenManagerError),
 
     AuthIncomplete,
     AuthError(String),
@@ -56,8 +56,8 @@ impl From<irc::error::Error> for ChatClientError {
         ChatClientError::Irc(value)
     }
 }
-impl From<crate::auth::access::AccessTokenManagerError> for ChatClientError {
-    fn from(value: crate::auth::access::AccessTokenManagerError) -> Self {
+impl From<crate::auth::error::AccessTokenManagerError> for ChatClientError {
+    fn from(value: crate::auth::error::AccessTokenManagerError) -> Self {
         ChatClientError::Access(value)
     }
 }

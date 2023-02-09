@@ -1,8 +1,8 @@
 use super::creds::OAuthToken;
+use super::error::OAuthServerError;
 use super::OAuthServerData;
 use ring::rand::SecureRandom;
 use std::collections::HashMap;
-use std::error::Error;
 use tiny_http::{Response, StatusCode};
 use tokio::task::JoinHandle;
 
@@ -11,18 +11,6 @@ type ClientResult = std::result::Result<OAuthToken, OAuthServerError>;
 #[derive(Debug)]
 pub struct OAuthServer {
     join_handle: JoinHandle<ClientResult>,
-}
-
-#[derive(Debug)]
-pub enum OAuthServerError {
-    OnServerCreate(Box<dyn Error + Send + Sync>),
-    OnReceive(std::io::Error),
-    OnResponse(std::io::Error),
-    OnAuth {
-        error: String,
-        error_description: String,
-    },
-    Ring(ring::error::Unspecified),
 }
 
 impl OAuthServer {
