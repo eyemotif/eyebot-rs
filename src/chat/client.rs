@@ -1,7 +1,9 @@
 use super::data::ChatMessage;
 use super::error::ChatClientError;
 use irc::client::Client;
+use irc::proto::message::Tag;
 use irc::proto::{Command, Response};
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -29,12 +31,7 @@ impl ChatClient {
         let client = Arc::new(client);
 
         Ok(ChatClient {
-            sender: watch::channel(ChatMessage {
-                client: client.clone(),
-                channel: String::new(),
-                message: String::new(),
-            })
-            .0,
+            sender: watch::channel(ChatMessage::empty(client.clone())).0,
             data,
             stream,
             client,
@@ -70,18 +67,58 @@ impl ChatClient {
                 Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
                 Command::PONG(_, _) => (),
 
-                Command::PRIVMSG(_, message) => {
+                Command::PRIVMSG(_, text) => {
+                    let mut tags = ChatClient::tags_to_map(
+                        message.tags.expect("The PRIVMSG command always has tags"),
+                    );
+                    let badges = tags
+                        .remove("badges")
+                        .expect("The PRIVMSG@badges tag is always present")
+                        .expect("The PRIVMSG@badgestag always has a value")
+                        .split(',')
+                        .map(|badge| {
+                            badge.split_once('/').expect(
+                                "Each PRIVMSG@badges badge always is in the format of badge/kind",
+                            )
+                        })
+                        .map(|(k, v)| (String::from(k), String::from(v)))
+                        .collect::<HashMap<_, _>>();
+
                     // TODO: stop sending on error
                     let _ = self.sender.send(ChatMessage {
                         client: self.client.clone(),
                         channel: self.data.chat_channel.clone(),
-                        message,
+                        message: text,
+                        id: tags
+                            .remove("id")
+                            .expect("The PRIVMSG@id tag is always present")
+                            .expect("The PRIVMSG@id tag always has a value"),
+                        is_broadcaster: badges.contains_key("broadcaster"),
+                        is_moderator: tags
+                            .remove("mod")
+                            .expect("The PRIVMSG@mod tag is always present")
+                            .expect("The PRIVMSG@mod tag always has a value")
+                            == "1",
+                        is_subscriber: badges.contains_key("subscriber"),
                     });
                 }
+                Command::JOIN(_, _, _) => {
+                    let username = message
+                        .prefix
+                        .expect("The JOIN command always has a prefix");
+                    let _username = match username {
+                        irc::proto::Prefix::Nickname(_, username, _) => username,
+                        _ => unreachable!("The JOIN prefix is always Prefix::Nickname"),
+                    };
+                    // TODO: handle JOIN
+                }
 
-                Command::Raw(comm, _) if comm == "USERSTATE" => (),
+                // TODO: handle states
+                Command::Raw(comm, _) if comm == "USERSTATE" => {
+                    // println!("USERSTATE: {:?}", message.tags);
+                }
 
-                // _ => println!("unknown message: {:?}", message.command),
+                // _ => println!("unknown message: {:?}", message),
                 _ => return Err(ChatClientError::ChatUnrecognized(message)),
             }
         }
@@ -139,7 +176,10 @@ impl ChatClient {
                 },
 
                 // TODO: handle states
-                Command::Raw(comm, _) if comm == "GLOBALUSERSTATE" => memory.globaluserstate = true,
+                Command::Raw(comm, _) if comm == "GLOBALUSERSTATE" => {
+                    // println!("GLOBALUSERSTATE: {:?}", message.tags);
+                    memory.globaluserstate = true
+                }
 
                 _ => return Err(ChatClientError::AuthUnrecognized(message)),
             }
@@ -193,8 +233,14 @@ impl ChatClient {
                 },
 
                 // TODO: handle states
-                Command::Raw(comm, _) if comm == "USERSTATE" => memory.userstate = true,
-                Command::Raw(comm, _) if comm == "ROOMSTATE" => memory.roomstate = true,
+                Command::Raw(comm, _) if comm == "USERSTATE" => {
+                    // println!("SELF USERSTATE: {:?}", message.tags);
+                    memory.userstate = true
+                }
+                Command::Raw(comm, _) if comm == "ROOMSTATE" => {
+                    // println!("ROOMSTATE: {:?}", message.tags);
+                    memory.roomstate = true
+                }
 
                 _ => return Err(ChatClientError::JoinUnrecognized(message)),
             }
@@ -210,5 +256,9 @@ impl ChatClient {
         }
 
         Err(ChatClientError::JoinIncomplete)
+    }
+
+    fn tags_to_map(tags: Vec<Tag>) -> HashMap<String, Option<String>> {
+        tags.into_iter().map(|Tag(k, v)| (k, v)).collect()
     }
 }
