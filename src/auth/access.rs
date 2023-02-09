@@ -1,7 +1,8 @@
 use super::creds::Credentials;
-use super::AccessTokenManagerData;
+use super::{AccessTokenManagerOAuth, AccessTokenManagerTokens};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
@@ -9,6 +10,7 @@ pub struct AccessTokenManager {
     creds: Arc<RwLock<Credentials>>,
     client_id: Arc<String>,
     client_secret: Arc<String>,
+    token_store: PathBuf,
 }
 
 #[derive(Debug)]
@@ -19,6 +21,8 @@ pub enum AccessTokenManagerError {
     OnValidate(TwitchError),
     OnRefresh(TwitchError),
     InvalidValidateResponse,
+    InvalidTokens,
+    IO(std::io::Error),
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,7 +46,7 @@ struct TokenValidationResponse {
 }
 
 impl AccessTokenManager {
-    pub async fn new(data: AccessTokenManagerData) -> Result<Self, AccessTokenManagerError> {
+    pub async fn new_oauth(data: AccessTokenManagerOAuth) -> Result<Self, AccessTokenManagerError> {
         let client = reqwest::Client::new();
         let response = client
             .post(
@@ -65,17 +69,55 @@ impl AccessTokenManager {
         )?;
 
         let creds = Arc::new(RwLock::new(Credentials {
-            oauth: data.oauth,
+            oauth: Some(data.oauth),
             access_token: response.access_token,
             refresh_token: response.refresh_token,
         }));
         // TODO: deal with expires_in field
         // AccessTokenManager::spawn_daemon(creds.clone());
-        Ok(AccessTokenManager {
+        let manager = AccessTokenManager {
             creds,
             client_id: Arc::new(data.client_id),
             client_secret: Arc::new(data.client_secret),
-        })
+            token_store: data.tokens_store_path,
+        };
+        manager.write_tokens()?;
+        Ok(manager)
+    }
+
+    pub async fn new_tokens(
+        data: AccessTokenManagerTokens,
+    ) -> Result<Self, AccessTokenManagerError> {
+        let tokens = if data.tokens_store_path.try_exists()? {
+            std::fs::read_to_string(&data.tokens_store_path)?
+        } else {
+            return Err(AccessTokenManagerError::InvalidTokens);
+        };
+
+        let (access_token, refresh_token) = tokens
+            .trim()
+            .split_once(' ')
+            .map(|(a, b)| (String::from(a), String::from(b)))
+            .ok_or(AccessTokenManagerError::IO(
+                std::io::ErrorKind::InvalidData.into(),
+            ))?;
+
+        let creds = Arc::new(RwLock::new(Credentials {
+            oauth: None,
+            access_token,
+            refresh_token,
+        }));
+        let manager = AccessTokenManager {
+            creds,
+            client_id: Arc::new(data.client_id),
+            client_secret: Arc::new(data.client_secret),
+            token_store: data.tokens_store_path,
+        };
+        if manager.validate().await? {
+            Ok(manager)
+        } else {
+            Err(AccessTokenManagerError::InvalidTokens)
+        }
     }
 
     pub async fn validate(&self) -> Result<bool, AccessTokenManagerError> {
@@ -138,6 +180,9 @@ impl AccessTokenManager {
         creds.access_token = response.access_token;
         creds.refresh_token = response.refresh_token;
 
+        drop(creds);
+        self.write_tokens()?;
+
         Ok(())
     }
 
@@ -153,9 +198,14 @@ impl AccessTokenManager {
         }
     }
 
-    // fn spawn_daemon(data: Arc<RwLock<Credentials>>) {
-    //     tokio::spawn(async move {});
-    // }
+    fn write_tokens(&self) -> Result<(), AccessTokenManagerError> {
+        let creds = self.creds.read().unwrap();
+        std::fs::write(
+            &self.token_store,
+            format!("{} {}", creds.access_token, creds.refresh_token),
+        )?;
+        Ok(())
+    }
 
     fn parse_twitch<T: DeserializeOwned + 'static>(
         data: &str,
@@ -196,7 +246,19 @@ impl std::fmt::Display for AccessTokenManagerError {
             AccessTokenManagerError::InvalidValidateResponse => f.write_str(
                 "The Client Id given in a token validation did not match the given Client Id.",
             ),
+            AccessTokenManagerError::InvalidTokens => {
+                f.write_str("The given Access and/or Refresh Tokens were invalid.")
+            }
+            AccessTokenManagerError::IO(err) => f.write_fmt(format_args!(
+                "Error accessing the Access/Refresh Tokens' store file': {}",
+                err
+            )),
         }
     }
 }
 impl std::error::Error for AccessTokenManagerError {}
+impl From<std::io::Error> for AccessTokenManagerError {
+    fn from(value: std::io::Error) -> Self {
+        AccessTokenManagerError::IO(value)
+    }
+}

@@ -11,4 +11,6 @@ pub struct Cli {
     pub clientid: String,
     #[arg(long)]
     pub clientsecret: String,
+    #[arg(long)]
+    pub store: Option<String>,
 }
