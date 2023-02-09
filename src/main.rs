@@ -45,8 +45,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
     tokio::spawn(chat_client.on_chat(|message| async move {
-        if message.message == "!ping" {
+        if message.is_super() && message.text == "!ping" {
             message.reply("Pong!");
+        }
+        if message.text.contains("egg") {
+            message.say("🥚")
         }
     }));
     chat_client.run().await?;

@@ -88,7 +88,7 @@ impl ChatClient {
                     let _ = self.sender.send(ChatMessage {
                         client: self.client.clone(),
                         channel: self.data.chat_channel.clone(),
-                        message: text,
+                        text,
                         id: tags
                             .remove("id")
                             .expect("The PRIVMSG@id tag is always present")
@@ -100,6 +100,10 @@ impl ChatClient {
                             .expect("The PRIVMSG@mod tag always has a value")
                             == "1",
                         is_subscriber: badges.contains_key("subscriber"),
+                        user_id: tags
+                            .remove("user-id")
+                            .expect("The PRIVMSG@user-id tag is always present")
+                            .expect("The PRIVMSG@user-id tag always has a value"),
                     });
                 }
                 Command::JOIN(_, _, _) => {

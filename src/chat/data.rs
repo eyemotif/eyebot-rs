@@ -15,14 +15,12 @@ pub struct ChatMessage {
     pub(super) id: String,
 
     pub channel: String,
-    pub message: String,
+    pub text: String,
+    pub user_id: String,
     pub is_broadcaster: bool,
     pub is_moderator: bool,
     pub is_subscriber: bool,
 }
-
-#[derive(Debug, Clone)]
-pub struct ChatUser {}
 
 impl ChatMessage {
     pub fn is_super(&self) -> bool {
@@ -54,10 +52,18 @@ impl ChatMessage {
             client,
             id: Default::default(),
             channel: Default::default(),
-            message: Default::default(),
+            text: Default::default(),
             is_broadcaster: Default::default(),
             is_moderator: Default::default(),
             is_subscriber: Default::default(),
+            user_id: Default::default(),
         }
     }
 }
+
+impl PartialEq for ChatMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for ChatMessage {}
