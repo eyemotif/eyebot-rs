@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub mod auth;
-mod chat;
+pub mod chat;
 mod cli;
 
 #[tokio::main]
@@ -22,7 +22,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .await
         {
             Ok(manager) => Some(manager),
-            Err(auth::error::AccessTokenManagerError::InvalidTokens) => None,
+            Err(auth::error::AccessTokenManagerError::InvalidTokens) => {
+                println!("The stored tokens are invalid/missing!");
+                None
+            }
             Err(err) => return Err(err.into()),
         };
 
@@ -70,7 +73,7 @@ async fn run_oauth_server(
     match oauth {
         Some(oauth) => Ok(OAuthToken(oauth)),
         None => {
-            println!("No OAuth provided. Starting server...");
+            println!("No OAuth provided. Starting server at http:://localhost:3000 ...");
             let auth = auth::oauth::OAuthServer::start_auth(auth::OAuthServerData {
                 client_id,
                 scopes: ["chat:read", "chat:edit"]

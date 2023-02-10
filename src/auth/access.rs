@@ -127,7 +127,7 @@ impl AccessTokenManager {
                     Err(AccessTokenManagerError::InvalidValidateResponse)
                 }
             }
-            Err(AccessTokenManagerError::OnRequest(TwitchError {
+            Err(AccessTokenManagerError::OnValidate(TwitchError {
                 error: _,
                 status: 401,
                 message,

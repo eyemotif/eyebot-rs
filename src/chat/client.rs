@@ -1,3 +1,5 @@
+use crate::chat::tag;
+
 use super::data::ChatMessage;
 use super::error::ChatClientError;
 use irc::client::Client;
@@ -69,43 +71,24 @@ impl ChatClient {
                 Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
                 Command::PONG(_, _) => (),
 
+                Command::NOTICE(_, _) => todo!(),
                 Command::PRIVMSG(_, text) => {
-                    let mut tags = ChatClient::tags_to_map(
-                        message.tags.expect("The PRIVMSG command always has tags"),
-                    );
-                    let badges = tags
-                        .remove("badges")
-                        .expect("The PRIVMSG@badges tag is always present")
-                        .expect("The PRIVMSG@badgestag always has a value")
-                        .split(',')
-                        .map(|badge| {
-                            badge.split_once('/').expect(
-                                "Each PRIVMSG@badges badge always is in the format of badge/kind",
-                            )
-                        })
-                        .map(|(k, v)| (String::from(k), String::from(v)))
-                        .collect::<HashMap<_, _>>();
+                    let tags = tag::tags::<tag::PRIVMSGTags>(
+                        &message.tags.expect("Message always has tags"),
+                    )
+                    .expect("Tags are always well formed");
+                    println!("CLEARCHAT {tags:?}");
 
                     // TODO: stop sending on error
                     let _ = self.sender.send(ChatMessage {
                         client: self.client.clone(),
+                        id: tags.id,
                         channel: self.data.chat_channel.clone(),
                         text,
-                        id: tags
-                            .remove("id")
-                            .expect("The PRIVMSG@id tag is always present")
-                            .expect("The PRIVMSG@id tag always has a value"),
-                        is_broadcaster: badges.contains_key("broadcaster"),
-                        is_moderator: tags
-                            .remove("mod")
-                            .expect("The PRIVMSG@mod tag is always present")
-                            .expect("The PRIVMSG@mod tag always has a value")
-                            == "1",
-                        is_subscriber: badges.contains_key("subscriber"),
-                        user_id: tags
-                            .remove("user-id")
-                            .expect("The PRIVMSG@user-id tag is always present")
-                            .expect("The PRIVMSG@user-id tag always has a value"),
+                        user_id: tags.user_id,
+                        is_broadcaster: tags.badges.contains_key("broadcaster"),
+                        is_moderator: tags.is_mod,
+                        is_subscriber: tags.subscriber,
                     });
                 }
                 Command::JOIN(_, _, _) => {
@@ -129,8 +112,37 @@ impl ChatClient {
                     self.joined_users.remove(&username);
                 }
 
-                // TODO: handle states
-                Command::Raw(comm, _) if comm == "USERSTATE" => {
+                Command::Raw(ref comm, ref params) => {
+                    match comm.as_str() {
+                        "CLEARCHAT" => {
+                            let tags = tag::tags::<tag::CLEARCHATTags>(
+                                &message.tags.expect("Message always has tags"),
+                            )
+                            .expect("Tags are always well formed");
+                            println!("{tags:?}");
+                        }
+                        "CLEARMSG" => {
+                            let tags = tag::tags::<tag::CLEARMSGTags>(
+                                &message.tags.expect("Message always has tags"),
+                            )
+                            .expect("Tags are always well formed");
+                            println!("{tags:?}");
+                        }
+                        "HOSTTARGET" => todo!(),
+                        "RECONNECT" => todo!(),
+                        "ROOMSTATE" => todo!(),
+                        "USERNOTICE" => {
+                            let tags = tag::tags::<tag::USERNOTICETags>(
+                                &message.tags.expect("Message always has tags"),
+                            )
+                            .expect("Tags are always well formed");
+                            println!("{tags:?}");
+                        }
+                        // TODO: handle userstates
+                        "USERSTATE" => (),
+                        "WHISPER" => todo!(),
+                        _ => return Err(ChatClientError::ChatUnrecognized(message)),
+                    }
                     // println!("USERSTATE: {:?}", message.tags);
                 }
 
