@@ -71,3 +71,10 @@ pub mod payload {
         pub condition: C,
     }
 }
+
+impl<P> PartialEq for Message<P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.metadata.message_id == other.metadata.message_id
+    }
+}
+impl<P> Eq for Message<P> {}

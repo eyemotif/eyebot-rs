@@ -72,7 +72,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let eventsub_task = if args.eventsub {
-        let broadcaster_user_id = twitch::id_from_login(
+        let broadcaster_user_id = twitch::user_from_login(
             "eye_motif",
             &twitch::HelixAuth {
                 client_id: args.clientid.clone(),
@@ -80,7 +80,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             },
         )
         .await?
-        .expect("Channel exists");
+        .expect("Channel exists")
+        .id;
 
         let eventsub_client =
             eventsub::client::EventsubClient::new(eventsub::data::EventsubClientData {
