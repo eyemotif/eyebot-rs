@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use crate::twitch::TwitchError;
 
 #[derive(Debug)]
 pub enum OAuthServerError {
@@ -22,11 +22,4 @@ pub enum AccessTokenManagerError {
     InvalidValidateResponse,
     InvalidTokens,
     IO(std::io::Error),
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TwitchError {
-    pub error: Option<String>,
-    pub status: u16,
-    pub message: String,
 }

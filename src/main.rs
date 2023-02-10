@@ -1,3 +1,4 @@
+use crate::eventsub::subscription::Subscription;
 use auth::OAuthToken;
 use clap::Parser;
 use std::path::PathBuf;
@@ -7,6 +8,7 @@ pub mod auth;
 pub mod chat;
 mod cli;
 pub mod eventsub;
+pub mod twitch;
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -70,11 +72,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let eventsub_task = if args.eventsub {
+        let broadcaster_user_id = twitch::id_from_login(
+            "eye_motif",
+            &twitch::HelixAuth {
+                client_id: args.clientid.clone(),
+                access: token_manager.clone(),
+            },
+        )
+        .await?
+        .expect("Channel exists");
+
         let eventsub_client =
             eventsub::client::EventsubClient::new(eventsub::data::EventsubClientData {
                 client_id: args.clientid.clone(),
                 access: token_manager.clone(),
-                subscriptions: vec![],
+                subscriptions: vec![Subscription::ChannelPointRedeem {
+                    broadcaster_user_id,
+                    reward_id: None,
+                }],
             })
             .await?;
         Some(eventsub_client.run())

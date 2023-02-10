@@ -1,6 +1,7 @@
 use super::creds::Credentials;
-use super::error::{AccessTokenManagerError, TwitchError};
+use super::error::AccessTokenManagerError;
 use super::{AccessTokenManagerOAuth, AccessTokenManagerTokens};
+use crate::twitch::TwitchError;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::path::PathBuf;
