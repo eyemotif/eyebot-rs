@@ -1,6 +1,5 @@
-use serde::Deserialize;
-
 use crate::auth::access::AccessTokenManager;
+use serde::Deserialize;
 
 pub type WelcomeMessage = Message<payload::Welcome>;
 pub type KeepaliveMessage = Message<payload::Keepalive>;

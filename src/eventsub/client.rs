@@ -1,8 +1,5 @@
-use crate::auth::access::AccessTokenManager;
-
 use super::data::EventsubClientData;
 use super::error::EventsubError;
-use super::subscription::Subscription;
 use super::{data, outbound};
 use tokio::io::AsyncWriteExt;
 use tokio_stream::StreamExt;
