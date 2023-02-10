@@ -19,6 +19,7 @@ pub struct ChatMessage {
 }
 
 impl ChatMessage {
+    #[must_use]
     pub fn user_is_super(&self) -> bool {
         self.is_broadcaster || self.is_moderator
     }

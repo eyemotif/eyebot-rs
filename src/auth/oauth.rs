@@ -14,15 +14,17 @@ pub struct OAuthServer {
 }
 
 impl OAuthServer {
+    #[must_use]
     pub fn start_auth(options: OAuthServerData) -> Self {
-        let join_handle = tokio::spawn(OAuthServer::host_auth(options));
+        let join_handle = tokio::spawn(async { OAuthServer::host_auth(options) });
         OAuthServer { join_handle }
     }
+    #[must_use]
     pub fn into_inner(self) -> JoinHandle<ClientResult> {
         self.join_handle
     }
 
-    async fn host_auth(options: OAuthServerData) -> ClientResult {
+    fn host_auth(options: OAuthServerData) -> ClientResult {
         let server = tiny_http::Server::http(&options.host_address)
             .map_err(OAuthServerError::OnServerCreate)?;
         let rand = ring::rand::SystemRandom::new();

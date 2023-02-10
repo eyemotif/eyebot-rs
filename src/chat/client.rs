@@ -20,6 +20,7 @@ pub struct ChatClient {
 }
 
 impl ChatClient {
+    #[must_use]
     pub async fn new(data: super::data::ChatClientData) -> Result<Self, ChatClientError> {
         let mut client = Client::from_config(irc::client::prelude::Config {
             owners: vec![String::from("eyebot-rs")],
@@ -190,7 +191,7 @@ impl ChatClient {
                 Command::PONG(_, _) => (),
 
                 Command::CAP(Some(_), irc::proto::CapSubCommand::ACK, Some(_), None) => {
-                    memory.ack = true;
+                    memory.ack = true
                 }
                 Command::Response(response, _) => match response {
                     Response::RPL_WELCOME => memory.welcome = true,

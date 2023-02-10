@@ -28,7 +28,7 @@ impl ChatInterface {
                 format!("#{}", self.0.twitch_channel),
                 message.into(),
             ))
-            .expect("TODO: handle ChatMessage.say() error")
+            .expect("TODO: handle ChatMessage.say() error");
     }
     pub fn reply<S: Into<String>>(&self, target: &ChatMessage, message: S) {
         self.0
@@ -44,6 +44,6 @@ impl ChatInterface {
                     message.into(),
                 ),
             })
-            .expect("TODO: handle ChatMessage.reply() error")
+            .expect("TODO: handle ChatMessage.reply() error");
     }
 }
