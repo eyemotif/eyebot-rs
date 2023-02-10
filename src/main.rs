@@ -50,15 +50,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         chat_channel: String::from("eye_motif"),
     })
     .await?;
-    tokio::spawn(chat_client.on_chat(|message| async move {
-        if message.is_super() && message.text == "!ping" {
-            message.reply("Pong!");
+    tokio::spawn(chat_client.on_chat(|message, bot| async move {
+        if message.user_is_super() && message.text == "!ping" {
+            bot.reply(&message, "Pong!");
         }
         if message.text.contains("egg") {
-            message.say("🥚");
+            bot.say("🥚");
         }
         if message.text == "frong" {
-            message.say("frong");
+            bot.say("frong");
         }
     }));
     chat_client.run().await?;
@@ -93,9 +93,9 @@ async fn run_oauth_server(
 
 fn expand_store_path(path: Option<String>) -> PathBuf {
     let path = path.unwrap_or(String::from("~/.eyebot-store"));
-    if path.starts_with("~/") {
+    if let Some(path) = path.strip_prefix("~/") {
         let mut home = home::home_dir().expect("No home directory found");
-        home.push(&path[2..]);
+        home.push(path);
         home
     } else {
         PathBuf::from(path)

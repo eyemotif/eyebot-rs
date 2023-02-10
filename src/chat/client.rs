@@ -1,14 +1,13 @@
-use crate::chat::tag;
-
 use super::data::ChatMessage;
 use super::error::ChatClientError;
+use super::interface::ChatInterface;
+use crate::chat::tag;
 use irc::client::Client;
 use irc::proto::message::Tag;
 use irc::proto::{Command, Response};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
-use tokio::sync::watch;
 use tokio_stream::StreamExt;
 
 #[derive(Debug)]
@@ -16,8 +15,8 @@ pub struct ChatClient {
     client: Arc<Client>,
     stream: irc::client::ClientStream,
     data: super::data::ChatClientData,
-    sender: watch::Sender<ChatMessage>,
     joined_users: HashSet<String>,
+    interface: super::interface::ChatInterface,
 }
 
 impl ChatClient {
@@ -34,23 +33,24 @@ impl ChatClient {
         let client = Arc::new(client);
 
         Ok(ChatClient {
-            sender: watch::channel(ChatMessage::empty(client.clone())).0,
+            joined_users: HashSet::new(),
+            interface: ChatInterface::new(client.clone(), data.chat_channel.clone()),
             data,
             stream,
             client,
-            joined_users: HashSet::new(),
         })
     }
 
     pub fn on_chat<Fut: Future>(
         &self,
-        mut f: impl FnMut(ChatMessage) -> Fut,
+        mut f: impl FnMut(ChatMessage, ChatInterface) -> Fut,
     ) -> impl Future<Output = ()> {
-        let mut receiver = self.sender.subscribe();
+        let chat_interface = self.interface.clone();
         async move {
+            let mut receiver = chat_interface.0.message_channel.subscribe();
             while receiver.changed().await.is_ok() {
                 let chat_message = receiver.borrow().clone();
-                f(chat_message).await;
+                f(chat_message, chat_interface.clone()).await;
             }
         }
     }
@@ -80,8 +80,7 @@ impl ChatClient {
                     println!("CLEARCHAT {tags:?}");
 
                     // TODO: stop sending on error
-                    let _ = self.sender.send(ChatMessage {
-                        client: self.client.clone(),
+                    let _ = self.interface.0.message_channel.send(ChatMessage {
                         id: tags.id,
                         channel: self.data.chat_channel.clone(),
                         text,
@@ -154,6 +153,19 @@ impl ChatClient {
     }
 
     async fn handle_auth_messages(mut self) -> Result<Self, ChatClientError> {
+        #[derive(Default)]
+        struct Memory {
+            ack: bool,
+            welcome: bool,
+            yourhost: bool,
+            created: bool,
+            myinfo: bool,
+            motdstart: bool,
+            motd: bool,
+            endofmotd: bool,
+            globaluserstate: bool,
+        }
+
         self.client.send(Command::CAP(
             None,
             irc::proto::CapSubCommand::REQ,
@@ -169,18 +181,6 @@ impl ChatClient {
         self.client
             .send(Command::NICK(self.data.bot_username.clone()))?;
 
-        #[derive(Default)]
-        struct Memory {
-            ack: bool,
-            welcome: bool,
-            yourhost: bool,
-            created: bool,
-            myinfo: bool,
-            motdstart: bool,
-            motd: bool,
-            endofmotd: bool,
-            globaluserstate: bool,
-        }
         let mut memory = Memory::default();
 
         while let Some(message) = self.stream.next().await.transpose()? {
@@ -229,12 +229,6 @@ impl ChatClient {
         Err(ChatClientError::AuthIncomplete)
     }
     async fn handle_join_messages(mut self) -> Result<Self, ChatClientError> {
-        self.client.send(Command::JOIN(
-            format!("#{}", self.data.chat_channel),
-            None,
-            None,
-        ))?;
-
         #[derive(Default)]
         struct Memory {
             join: bool,
@@ -243,6 +237,13 @@ impl ChatClient {
             userstate: bool,
             roomstate: bool,
         }
+
+        self.client.send(Command::JOIN(
+            format!("#{}", self.data.chat_channel),
+            None,
+            None,
+        ))?;
+
         let mut memory = Memory::default();
 
         while let Some(message) = self.stream.next().await.transpose()? {

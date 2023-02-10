@@ -232,8 +232,7 @@ impl std::fmt::Display for AccessTokenManagerError {
                 f.write_str("The given Access and/or Refresh Tokens were invalid.")
             }
             AccessTokenManagerError::IO(err) => f.write_fmt(format_args!(
-                "Error accessing the Access/Refresh Tokens' store file': {}",
-                err
+                "Error accessing the Access/Refresh Tokens' store file': {err}",
             )),
         }
     }
