@@ -19,6 +19,7 @@ urlencoding = "2.1.2"
 webpki-roots = "0.22.6"
 tokio-stream = "0.1.11"
 home = "0.5.4"
+tokio-tungstenite = { version = "0.18.0", features = ["rustls-tls-webpki-roots"] }
 
 # [profile.release]
 # panic = "abort"

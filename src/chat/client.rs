@@ -112,7 +112,7 @@ impl ChatClient {
                     self.joined_users.remove(&username);
                 }
 
-                Command::Raw(ref comm, ref params) => {
+                Command::Raw(ref comm, ref _params) => {
                     match comm.as_str() {
                         "CLEARCHAT" => {
                             let tags = tag::tags::<tag::CLEARCHATTags>(

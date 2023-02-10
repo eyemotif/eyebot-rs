@@ -6,6 +6,7 @@ use std::process::ExitCode;
 pub mod auth;
 pub mod chat;
 mod cli;
+pub mod eventsub;
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
