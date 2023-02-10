@@ -13,4 +13,9 @@ pub struct Cli {
     pub clientsecret: String,
     #[arg(long)]
     pub store: Option<String>,
+
+    #[arg(short, long)]
+    pub chat: bool,
+    #[arg(short, long)]
+    pub eventsub: bool,
 }

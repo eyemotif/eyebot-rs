@@ -1,10 +1,19 @@
 use serde::Deserialize;
 
+use crate::auth::access::AccessTokenManager;
+
 pub type WelcomeMessage = Message<payload::Welcome>;
 pub type KeepaliveMessage = Message<payload::Keepalive>;
 pub type NotificationMessage<E, C> = Message<payload::Notification<E, C>>;
 pub type ReconnectMessage = Message<payload::Reconnect>;
 pub type RevocationMessage<C> = Message<payload::Revocation<C>>;
+
+#[derive(Debug)]
+pub struct EventsubClientData {
+    pub client_id: String,
+    pub access: AccessTokenManager,
+    pub subscriptions: Vec<super::subscription::Subscription>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct Message<P> {

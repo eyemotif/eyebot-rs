@@ -45,24 +45,48 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let chat_client = chat::client::ChatClient::new(chat::data::ChatClientData {
-        access: token_manager,
-        bot_username: String::from("eye___bot"),
-        chat_channel: String::from("eye_motif"),
-    })
-    .await?;
-    tokio::spawn(chat_client.on_chat(|message, bot| async move {
-        if message.user_is_super() && message.text == "!ping" {
-            bot.reply(&message, "Pong!");
-        }
-        if message.text.contains("egg") {
-            bot.say("🥚");
-        }
-        if message.text == "frong" {
-            bot.say("frong");
-        }
-    }));
-    chat_client.run().await?;
+    let chat_task = if args.chat {
+        let chat_client = chat::client::ChatClient::new(chat::data::ChatClientData {
+            access: token_manager.clone(),
+            bot_username: String::from("eye___bot"),
+            chat_channel: String::from("eye_motif"),
+        })
+        .await?;
+        tokio::spawn(chat_client.on_chat(|message, bot| async move {
+            if message.user_is_super() && message.text == "!ping" {
+                bot.reply(&message, "Pong!");
+            }
+            if message.text.contains("egg") {
+                bot.say("🥚");
+            }
+            if message.text == "frong" {
+                bot.say("frong");
+            }
+        }));
+
+        Some(chat_client.run())
+    } else {
+        None
+    };
+
+    let eventsub_task = if args.eventsub {
+        let eventsub_client =
+            eventsub::client::EventsubClient::new(eventsub::data::EventsubClientData {
+                client_id: args.clientid.clone(),
+                access: token_manager.clone(),
+                subscriptions: vec![],
+            })
+            .await?;
+        Some(eventsub_client.run())
+    } else {
+        None
+    };
+
+    tokio::select! {
+        Err(err) = async { println!("Running chat client!"); chat_task.unwrap().await }, if chat_task.is_some() => return Err(err.into()),
+        Err(err) = async { println!("Running eventsub client!"); eventsub_task.unwrap().await }, if eventsub_task.is_some() => return Err(err.into()),
+        else => (),
+    }
 
     Ok(())
 }
