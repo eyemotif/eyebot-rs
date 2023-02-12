@@ -19,13 +19,13 @@ pub struct AccessTokenManager {
 struct TokenRequestResponse {
     access_token: String,
     refresh_token: String,
-    expires_in: u64,
+    // expires_in: u64,
 }
 
 #[derive(Debug, Deserialize)]
 struct TokenValidationResponse {
     client_id: String,
-    expires_in: u64,
+    // expires_in: u64,
 }
 
 impl AccessTokenManager {

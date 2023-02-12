@@ -24,6 +24,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await
         {
+            Ok(_) if args.reauth => None,
             Ok(manager) => Some(manager),
             Err(auth::error::AccessTokenManagerError::InvalidTokens) => {
                 println!("The stored tokens are invalid/missing!");
@@ -93,6 +94,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }],
             })
             .await?;
+        tokio::spawn(eventsub_client.on_message::<eventsub::data::NotificationMessage<eventsub::event::ChannelPointRedeem>, _> (|notification| async move {
+            println!("User {} redeemed {}!", notification.payload.event.user_login, notification.payload.event.reward.title);
+        }));
         Some(eventsub_client.run())
     } else {
         None
@@ -117,7 +121,7 @@ async fn run_oauth_server(
             println!("No OAuth provided. Starting server at http:://localhost:3000 ...");
             let auth = auth::oauth::OAuthServer::start_auth(auth::OAuthServerData {
                 client_id,
-                scopes: ["chat:read", "chat:edit"]
+                scopes: ["chat:read", "chat:edit", "channel:read:redemptions"]
                     .into_iter()
                     .map(String::from)
                     .collect(),

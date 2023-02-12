@@ -1,3 +1,5 @@
+use crate::twitch::TwitchError;
+
 #[derive(Debug)]
 pub enum EventsubError {
     Access(crate::auth::error::AccessTokenManagerError),
@@ -8,6 +10,9 @@ pub enum EventsubError {
     WelcomeInvalid,
     WelcomeIncomplete,
     OnOutbound(reqwest::Error),
+    Twitch(TwitchError),
+    OnReceive(tokio_tungstenite::tungstenite::Error),
+    ReceiveInvalid,
 }
 
 impl std::fmt::Display for EventsubError {
@@ -25,9 +30,7 @@ impl std::fmt::Display for EventsubError {
             EventsubError::OnWelcome(err) => f.write_fmt(format_args!(
                 "Eventsub error while receiving a Welcome message from Twitch: {err}"
             )),
-            EventsubError::WelcomeInvalid => {
-                f.write_fmt(format_args!("Eventsub: Invalid Welcome response"))
-            }
+            EventsubError::WelcomeInvalid => f.write_str("Eventsub: Invalid Welcome response"),
             EventsubError::WelcomeIncomplete => {
                 f.write_fmt(format_args!("Eventsub: Missing Welcome response"))
             }
@@ -37,6 +40,15 @@ impl std::fmt::Display for EventsubError {
             EventsubError::OnOutbound(err) => f.write_fmt(format_args!(
                 "Eventsub error while sending data to Twitch: {err}"
             )),
+            EventsubError::Twitch(err) => f.write_fmt(format_args!(
+                "Eventsub error while sending data to Twitch: {err}"
+            )),
+            EventsubError::OnReceive(err) => f.write_fmt(format_args!(
+                "Eventsub error while receiving a message from Twitch: {err}"
+            )),
+            EventsubError::ReceiveInvalid => {
+                f.write_str("Eventsub: Message received was not valid JSON")
+            }
         }
     }
 }

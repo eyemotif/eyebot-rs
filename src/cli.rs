@@ -13,6 +13,8 @@ pub struct Cli {
     pub clientsecret: String,
     #[arg(long)]
     pub store: Option<String>,
+    #[arg(long)]
+    pub reauth: bool,
 
     #[arg(short, long)]
     pub chat: bool,

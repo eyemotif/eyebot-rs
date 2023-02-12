@@ -35,13 +35,13 @@ pub fn from_twitch_response<T: serde::de::DeserializeOwned>(twitch_response: &st
 
 pub async fn user_from_login(login: &str, auth: &HelixAuth) -> Result<Option<TwitchUser>> {
     user_from_url(
-        format!("https://api.twitch.tv/helix/users?login={login}'"),
+        format!("https://api.twitch.tv/helix/users?login={login}"),
         auth,
     )
     .await
 }
 pub async fn user_from_id(id: &str, auth: &HelixAuth) -> Result<Option<TwitchUser>> {
-    user_from_url(format!("https://api.twitch.tv/helix/users?id={id}'"), auth).await
+    user_from_url(format!("https://api.twitch.tv/helix/users?id={id}"), auth).await
 }
 
 async fn user_from_url<U: reqwest::IntoUrl>(
