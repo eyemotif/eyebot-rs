@@ -1,8 +1,8 @@
-use std::future::Future;
-
-use super::data::EventsubClientData;
+use super::data::{EventsubClientData, NotificationMessage};
 use super::error::EventsubError;
+use super::event::Event;
 use super::{data, outbound};
+use std::future::Future;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
@@ -48,7 +48,10 @@ impl EventsubClient {
 
     async fn reconnect(&mut self) -> Result<(), EventsubError> {
         self.websocket
-            .close(None)
+            .close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                reason: std::borrow::Cow::Owned(String::from("Reconnecting.")),
+            }))
             .await
             .map_err(EventsubError::OnReconnect)?;
         self.websocket = EventsubClient::connect_websocket()
@@ -72,6 +75,12 @@ impl EventsubClient {
                 }
             }
         }
+    }
+    pub fn on_event<E: Event, Fut: Future>(
+        &self,
+        f: impl FnMut(NotificationMessage<E>) -> Fut,
+    ) -> impl Future<Output = ()> {
+        self.on_message(f)
     }
 
     pub async fn run(mut self) -> Result<(), EventsubError> {

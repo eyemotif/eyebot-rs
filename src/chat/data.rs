@@ -38,7 +38,7 @@ impl ChatMessage {
         }
         self.text
             .char_indices()
-            .filter_map(|(loc, chr)| (!emote_locations.contains(&(loc as u64))).then_some(chr))
+            .filter_map(|(loc, chr)| (!emote_locations.contains(&(loc as u16))).then_some(chr))
             .collect()
     }
 }

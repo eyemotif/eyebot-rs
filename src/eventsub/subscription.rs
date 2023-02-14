@@ -8,4 +8,6 @@ pub enum Subscription {
         broadcaster_user_id: String,
         reward_id: Option<String>,
     },
+    #[serde(rename = "channel.subscription.message")]
+    Subscription { broadcaster_user_id: String },
 }

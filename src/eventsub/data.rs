@@ -5,7 +5,7 @@ pub type WelcomeMessage = Message<payload::Welcome>;
 pub type KeepaliveMessage = Message<payload::Keepalive>;
 pub type NotificationMessage<E> = Message<payload::Notification<E>>;
 pub type ReconnectMessage = Message<payload::Reconnect>;
-pub type RevocationMessage<C> = Message<payload::Revocation<C>>;
+pub type RevocationMessage = Message<payload::Revocation>;
 
 #[derive(Debug)]
 pub struct EventsubClientData {
@@ -48,7 +48,7 @@ pub mod payload {
     pub struct Keepalive {}
     #[derive(Debug, Deserialize)]
     pub struct Notification<E> {
-        // pub subscription: Subscription<C>,
+        pub subscription: Subscription,
         pub event: E,
     }
     #[derive(Debug, Deserialize)]
@@ -56,18 +56,17 @@ pub mod payload {
         pub session: EventSession,
     }
     #[derive(Debug, Deserialize)]
-    pub struct Revocation<C> {
-        pub subscription: Subscription<C>,
+    pub struct Revocation {
+        pub subscription: Subscription,
     }
 
     #[derive(Debug, Deserialize)]
-    pub struct Subscription<C> {
+    pub struct Subscription {
         pub id: String,
         pub status: String,
-        #[serde(rename = "type")]
-        pub event_type: String,
         pub version: String,
-        pub condition: C,
+        #[serde(flatten)]
+        pub subscription: super::super::subscription::Subscription,
     }
 }
 

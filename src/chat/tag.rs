@@ -32,7 +32,7 @@ pub struct PRIVMSGTags {
     pub user_id: String,
     pub display_name: String,
     pub badges: HashMap<String, String>,
-    pub bits: Option<u64>,
+    pub bits: Option<u32>,
     /// original tag: mod
     pub is_mod: bool,
     pub subscriber: bool,
@@ -66,7 +66,7 @@ pub struct NoticeRaidTags {
 #[derive(Debug, Clone)]
 pub struct EmoteInfo {
     pub id: String,
-    pub locations: Vec<(u64, u64)>,
+    pub locations: Vec<(u16, u16)>,
 }
 
 pub fn tags<T: Tags>(raw_tags: &[Tag]) -> Option<T> {

@@ -67,7 +67,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             if !message.emotes.is_empty() {
                 println!(
-                    "{} -> {:?} {:?}",
+                    "message with emotes: {} -> {:?} {:?}",
                     message.strip_emotes(),
                     message.text,
                     message.emotes
@@ -102,9 +102,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }],
             })
             .await?;
-        tokio::spawn(eventsub_client.on_message::<eventsub::data::NotificationMessage<eventsub::event::ChannelPointRedeem>, _> (|notification| async move {
-            println!("User {} redeemed {}!", notification.payload.event.user_login, notification.payload.event.reward.title);
-        }));
+        tokio::spawn(
+            eventsub_client.on_event::<eventsub::event::ChannelPointRedeem, _>(
+                |notification| async move {
+                    println!(
+                        "User {} redeemed {}!",
+                        notification.payload.event.user_login,
+                        notification.payload.event.reward.title
+                    );
+                },
+            ),
+        );
+        tokio::spawn(
+            eventsub_client.on_event::<eventsub::event::Subscription, _>(
+                |notification| async move {
+                    println!(
+                        "User {} subscribed for {} months!\n\tMessage: {:?}!",
+                        notification.payload.event.user_login,
+                        notification.payload.event.cumulative_months,
+                        notification.payload.event.message,
+                    );
+                },
+            ),
+        );
         Some(eventsub_client.run())
     } else {
         None
@@ -129,10 +149,15 @@ async fn run_oauth_server(
             println!("No OAuth provided. Starting server at http:://localhost:3000 ...");
             let auth = auth::oauth::OAuthServer::start_auth(auth::OAuthServerData {
                 client_id,
-                scopes: ["chat:read", "chat:edit", "channel:read:redemptions"]
-                    .into_iter()
-                    .map(String::from)
-                    .collect(),
+                scopes: [
+                    "chat:read",
+                    "chat:edit",
+                    "channel:read:redemptions",
+                    "channel:read:subscriptions",
+                ]
+                .into_iter()
+                .map(String::from)
+                .collect(),
                 host_address: String::from("localhost:3000"),
                 response_path: String::from("/response"),
             });
