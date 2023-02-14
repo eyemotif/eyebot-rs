@@ -1,4 +1,7 @@
 use crate::auth::access::AccessTokenManager;
+use std::collections::HashSet;
+
+pub use super::tag::EmoteInfo;
 
 #[derive(Debug)]
 pub struct ChatClientData {
@@ -16,12 +19,27 @@ pub struct ChatMessage {
     pub is_broadcaster: bool,
     pub is_moderator: bool,
     pub is_subscriber: bool,
+    pub emotes: Vec<EmoteInfo>,
 }
 
 impl ChatMessage {
     #[must_use]
     pub fn user_is_super(&self) -> bool {
         self.is_broadcaster || self.is_moderator
+    }
+    pub fn strip_emotes(&self) -> String {
+        let mut emote_locations = HashSet::new();
+        for emote in &self.emotes {
+            for (start, end) in &emote.locations {
+                for index in *start..=*end {
+                    emote_locations.insert(index);
+                }
+            }
+        }
+        self.text
+            .char_indices()
+            .filter_map(|(loc, chr)| (!emote_locations.contains(&(loc as u64))).then_some(chr))
+            .collect()
     }
 }
 

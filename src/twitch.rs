@@ -25,6 +25,15 @@ pub struct TwitchUser {
     pub display_name: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TwitchEmote {
+    pub id: String,
+    pub name: String,
+    pub format: Vec<String>,
+    pub scale: Vec<String>,
+    pub theme_mode: Vec<String>,
+}
+
 pub fn from_twitch_response<T: serde::de::DeserializeOwned>(twitch_response: &str) -> Result<T> {
     if let Ok(error) = serde_json::from_str::<TwitchError>(twitch_response) {
         Err(error.into())
@@ -99,3 +108,10 @@ impl PartialEq for TwitchUser {
     }
 }
 impl Eq for TwitchUser {}
+
+impl PartialEq for TwitchEmote {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for TwitchEmote {}

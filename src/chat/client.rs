@@ -3,9 +3,8 @@ use super::error::ChatClientError;
 use super::interface::ChatInterface;
 use crate::chat::tag;
 use irc::client::Client;
-use irc::proto::message::Tag;
 use irc::proto::{Command, Response};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
@@ -78,7 +77,6 @@ impl ChatClient {
                         &message.tags.expect("Message always has tags"),
                     )
                     .expect("Tags are always well formed");
-                    println!("CLEARCHAT {tags:?}");
 
                     // TODO: stop sending on error
                     let _ = self.interface.0.message_channel.send(ChatMessage {
@@ -89,6 +87,7 @@ impl ChatClient {
                         is_broadcaster: tags.badges.contains_key("broadcaster"),
                         is_moderator: tags.is_mod,
                         is_subscriber: tags.subscriber,
+                        emotes: tags.emotes,
                     });
                 }
                 Command::JOIN(_, _, _) => {
@@ -286,9 +285,5 @@ impl ChatClient {
         }
 
         Err(ChatClientError::JoinIncomplete)
-    }
-
-    fn tags_to_map(tags: Vec<Tag>) -> HashMap<String, Option<String>> {
-        tags.into_iter().map(|Tag(k, v)| (k, v)).collect()
     }
 }

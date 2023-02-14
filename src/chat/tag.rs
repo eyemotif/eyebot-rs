@@ -37,7 +37,7 @@ pub struct PRIVMSGTags {
     pub is_mod: bool,
     pub subscriber: bool,
     pub vip: bool,
-    // TODO: emotes
+    pub emotes: Vec<EmoteInfo>,
 }
 
 #[derive(Debug)]
@@ -63,6 +63,12 @@ pub struct NoticeRaidTags {
     pub viewcount: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct EmoteInfo {
+    pub id: String,
+    pub locations: Vec<(u64, u64)>,
+}
+
 pub fn tags<T: Tags>(raw_tags: &[Tag]) -> Option<T> {
     let tags_map = raw_tags
         .iter()
@@ -71,17 +77,50 @@ pub fn tags<T: Tags>(raw_tags: &[Tag]) -> Option<T> {
     T::from_tags(tags_map).map(|(tags, _)| tags)
 }
 
-impl CLEARCHATTags {
-    pub fn is_chat_clear(&self) -> bool {
-        self.target_user_id.is_none()
-    }
-    pub fn is_timeout(&self) -> bool {
-        self.target_user_id.is_some() && self.ban_duration.is_some()
-    }
-    pub fn is_ban(&self) -> bool {
-        self.target_user_id.is_some() && self.ban_duration.is_none()
-    }
+fn emote_tag_to_emotes(emotes: Option<Option<String>>) -> Vec<EmoteInfo> {
+    // format: emote1-id:start1-end1,start2-end2/emote2-id...
+    emotes
+        .map(|emotes| {
+            emotes
+                .expect("Tag always has a value")
+                .split('/')
+                .map(|ident| {
+                    let (id, locations) = ident
+                        .split_once(':')
+                        .expect("Emote identifier is always well formed");
+                    let locations = locations
+                        .split(',')
+                        .map(|loc| {
+                            let (start, end) = loc
+                                .split_once('-')
+                                .expect("Emote location is always well formed");
+                            (
+                                start.parse().expect("Emote start is always an integer"),
+                                end.parse().expect("Emote end is always an integer"),
+                            )
+                        })
+                        .collect();
+                    EmoteInfo {
+                        id: String::from(id),
+                        locations,
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
 }
+
+// impl CLEARCHATTags {
+//     pub fn is_chat_clear(&self) -> bool {
+//         self.target_user_id.is_none()
+//     }
+//     pub fn is_timeout(&self) -> bool {
+//         self.target_user_id.is_some() && self.ban_duration.is_some()
+//     }
+//     pub fn is_ban(&self) -> bool {
+//         self.target_user_id.is_some() && self.ban_duration.is_none()
+//     }
+// }
 
 impl Tags for CLEARCHATTags {
     fn from_tags(
@@ -126,7 +165,7 @@ impl Tags for PRIVMSGTags {
     fn from_tags(
         mut tags: HashMap<String, Option<String>>,
     ) -> Option<(Self, HashMap<String, Option<String>>)> {
-        let (Some(id), Some(user_id), Some(display_name), Some(badges), bits, Some(is_mod), Some(subscriber), vip) = (tags.remove("id"), tags.remove("user-id"), tags.remove("display-name"), tags.remove("badges"), tags.remove("bits"), tags.remove("mod"), tags.remove("subscriber"), tags.remove("vip")) else {
+        let (Some(id), Some(user_id), Some(display_name), Some(badges), bits, Some(is_mod), Some(subscriber), vip, emotes) = (tags.remove("id"), tags.remove("user-id"), tags.remove("display-name"), tags.remove("badges"), tags.remove("bits"), tags.remove("mod"), tags.remove("subscriber"), tags.remove("vip"), tags.remove("emotes")) else {
             return None;
         };
         let badges = badges
@@ -153,6 +192,7 @@ impl Tags for PRIVMSGTags {
                 is_mod: is_mod.expect("Tag always has a value") == "1",
                 subscriber: subscriber.expect("Tag always has a value") == "1",
                 vip: vip.is_some(),
+                emotes: emote_tag_to_emotes(emotes),
             },
             tags,
         ))

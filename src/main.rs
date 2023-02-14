@@ -65,6 +65,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if message.text == "frong" {
                 bot.say("frong");
             }
+            if !message.emotes.is_empty() {
+                println!(
+                    "{} -> {:?} {:?}",
+                    message.strip_emotes(),
+                    message.text,
+                    message.emotes
+                );
+            }
         }));
 
         Some(chat_client.run())
