@@ -17,7 +17,7 @@ impl ChatInterface {
         Self(Arc::new(InterfaceData {
             twitch_channel,
             irc_client,
-            message_channel: watch::channel(Default::default()).0,
+            message_channel: watch::channel(ChatMessage::default()).0,
         }))
     }
 

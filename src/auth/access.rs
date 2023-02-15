@@ -29,7 +29,6 @@ struct TokenValidationResponse {
 }
 
 impl AccessTokenManager {
-    #[must_use]
     pub async fn new_oauth(data: AccessTokenManagerOAuth) -> Result<Self, AccessTokenManagerError> {
         let client = reqwest::Client::new();
         let response = client
@@ -69,7 +68,6 @@ impl AccessTokenManager {
         Ok(manager)
     }
 
-    #[must_use]
     pub async fn new_tokens(
         data: AccessTokenManagerTokens,
     ) -> Result<Self, AccessTokenManagerError> {

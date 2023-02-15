@@ -27,6 +27,7 @@ impl ChatMessage {
     pub fn user_is_super(&self) -> bool {
         self.is_broadcaster || self.is_moderator
     }
+    #[must_use]
     pub fn strip_emotes(&self) -> String {
         let mut emote_locations = HashSet::new();
         for emote in &self.emotes {

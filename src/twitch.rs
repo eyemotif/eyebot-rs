@@ -62,6 +62,7 @@ pub struct TwitchStream {
     pub language: String,
     pub is_mature: bool,
 }
+
 pub fn from_twitch_response<T: serde::de::DeserializeOwned>(twitch_response: &str) -> Result<T> {
     if let Ok(error) = serde_json::from_str::<TwitchError>(twitch_response) {
         Err(error.into())

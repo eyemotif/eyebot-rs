@@ -111,7 +111,7 @@ impl OAuthServer {
                 }
                 _ => request.respond(OAuthServer::code(404, "Not found.")),
             }
-            .map_err(OAuthServerError::OnResponse)?
+            .map_err(OAuthServerError::OnResponse)?;
         }
     }
 

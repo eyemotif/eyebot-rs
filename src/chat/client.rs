@@ -94,9 +94,8 @@ impl ChatClient {
                     let username = message
                         .prefix
                         .expect("The JOIN command always has a prefix");
-                    let username = match username {
-                        irc::proto::Prefix::Nickname(_, username, _) => username,
-                        _ => unreachable!("The JOIN prefix is always Prefix::Nickname"),
+                    let irc::proto::Prefix::Nickname(_, username, _) = username else {
+                        unreachable!("The JOIN prefix is always Prefix::Nickname");
                     };
                     self.joined_users.insert(username);
                 }
@@ -104,9 +103,8 @@ impl ChatClient {
                     let username = message
                         .prefix
                         .expect("The PART command always has a prefix");
-                    let username = match username {
-                        irc::proto::Prefix::Nickname(_, username, _) => username,
-                        _ => unreachable!("The PART prefix is always Prefix::Nickname"),
+                    let irc::proto::Prefix::Nickname(_, username, _) = username else {
+                        unreachable!("The PART prefix is always Prefix::Nickname");
                     };
                     self.joined_users.remove(&username);
                 }
@@ -264,11 +262,11 @@ impl ChatClient {
                 // TODO: handle states
                 Command::Raw(comm, _) if comm == "USERSTATE" => {
                     // println!("SELF USERSTATE: {:?}", message.tags);
-                    memory.userstate = true
+                    memory.userstate = true;
                 }
                 Command::Raw(comm, _) if comm == "ROOMSTATE" => {
                     // println!("ROOMSTATE: {:?}", message.tags);
-                    memory.roomstate = true
+                    memory.roomstate = true;
                 }
 
                 _ => return Err(ChatClientError::JoinUnrecognized(message)),
