@@ -10,4 +10,16 @@ pub enum Subscription {
     },
     #[serde(rename = "channel.subscription.message")]
     Subscription { broadcaster_user_id: String },
+    #[serde(rename = "channel.raid")]
+    RaidTo {
+        #[serde(rename = "to_broadcaster_user_id")]
+        broadcaster_user_id: String,
+    },
+    #[serde(rename = "channel.raid")]
+    RaidFrom {
+        #[serde(rename = "from_broadcaster_user_id")]
+        broadcaster_user_id: String,
+    },
+    #[serde(rename = "stream.online")]
+    StreamOnline { broadcaster_user_id: String },
 }

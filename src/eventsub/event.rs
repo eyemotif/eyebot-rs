@@ -10,20 +10,21 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for ChannelPointRedeem {}
     impl Sealed for Subscription {}
+    impl Sealed for Raid {}
+    impl Sealed for StreamOnline {}
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ChannelPointRedeem {
     pub id: String,
-    pub user_login: String,
+    pub user_name: String,
     pub user_id: String,
     pub user_input: Option<String>,
     pub reward: Reward,
 }
-
 #[derive(Debug, Deserialize)]
 pub struct Subscription {
-    pub user_login: String,
+    pub user_name: String,
     pub user_id: String,
     pub tier: String,
     pub cumulative_months: u16,
@@ -31,6 +32,25 @@ pub struct Subscription {
     pub duration_months: u16,
     pub message: SubscriptionMessage,
 }
+#[derive(Debug, Deserialize)]
+pub struct Raid {
+    pub from_broadcaster_user_id: String,
+    pub from_broadcaster_user_name: String,
+    pub to_broadcaster_user_id: String,
+    pub to_broadcaster_user_name: String,
+    pub viewers: u32,
+}
+#[derive(Debug, Deserialize)]
+pub struct StreamOnline {
+    #[serde(rename = "type")]
+    pub stream_type: String,
+    pub started_at: String,
+}
+
+impl Event for ChannelPointRedeem {}
+impl Event for Subscription {}
+impl Event for Raid {}
+impl Event for StreamOnline {}
 
 #[derive(Debug, Deserialize)]
 pub struct Reward {
@@ -72,6 +92,3 @@ impl PartialEq for Reward {
     }
 }
 impl Eq for Reward {}
-
-impl Event for ChannelPointRedeem {}
-impl Event for Subscription {}

@@ -107,7 +107,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 |notification| async move {
                     println!(
                         "User {} redeemed {}!",
-                        notification.payload.event.user_login,
+                        notification.payload.event.user_name,
                         notification.payload.event.reward.title
                     );
                 },
@@ -118,7 +118,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 |notification| async move {
                     println!(
                         "User {} subscribed for {} months!\n\tMessage: {:?}!",
-                        notification.payload.event.user_login,
+                        notification.payload.event.user_name,
                         notification.payload.event.cumulative_months,
                         notification.payload.event.message,
                     );
@@ -154,6 +154,7 @@ async fn run_oauth_server(
                     "chat:edit",
                     "channel:read:redemptions",
                     "channel:read:subscriptions",
+                    "bits:read",
                 ]
                 .into_iter()
                 .map(String::from)
