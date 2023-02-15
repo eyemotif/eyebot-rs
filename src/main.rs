@@ -76,16 +76,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(bot.on_chat_message(|message, bot| async move {
         if message.user_is_super() {
             match message.text.as_str() {
-                "!ping" => bot.reply(&message, "Pong!"),
-                "!shutdown" => return bot.shutdown(),
+                "!ping" => bot.reply(&message, "Pong!").await,
+                "!shutdown" => return bot.shutdown().await,
                 _ => (),
             }
         }
         if message.text.contains("egg") {
-            bot.say("🥚");
+            bot.say("🥚").await;
         }
         if message.text == "frong" {
-            bot.say("frong");
+            bot.say("frong").await;
         }
         if !message.emotes.is_empty() {
             println!(
@@ -100,7 +100,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(
         bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
             if notif.payload.event.reward.title == "Pop" {
-                bot.say(format!("{} redeemed Pop!", notif.payload.event.user_name));
+                bot.say(format!("{} redeemed Pop!", notif.payload.event.user_name))
+                    .await;
             }
         }),
     );
