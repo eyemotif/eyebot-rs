@@ -23,6 +23,7 @@ pub struct TwitchUser {
     pub id: String,
     pub login: String,
     pub display_name: String,
+    pub description: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +35,33 @@ pub struct TwitchEmote {
     pub theme_mode: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TwitchChannel {
+    pub broadcaster_id: String,
+    pub broadcaster_login: String,
+    pub broadcaster_name: String,
+    pub broadcaster_language: String,
+    pub game_id: String,
+    pub game_name: String,
+    pub title: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TwitchStream {
+    pub id: String,
+    pub user_id: String,
+    pub user_login: String,
+    pub user_name: String,
+    pub game_id: String,
+    pub game_name: String,
+    pub title: String,
+    pub tags: Vec<String>,
+    pub viewer_count: u32,
+    pub started_at: String,
+    pub language: String,
+    pub is_mature: bool,
+}
 pub fn from_twitch_response<T: serde::de::DeserializeOwned>(twitch_response: &str) -> Result<T> {
     if let Ok(error) = serde_json::from_str::<TwitchError>(twitch_response) {
         Err(error.into())
@@ -43,20 +71,34 @@ pub fn from_twitch_response<T: serde::de::DeserializeOwned>(twitch_response: &st
 }
 
 pub async fn user_from_login(login: &str, auth: &HelixAuth) -> Result<Option<TwitchUser>> {
-    user_from_url(
+    get_paginated_value(
         format!("https://api.twitch.tv/helix/users?login={login}"),
         auth,
     )
     .await
 }
 pub async fn user_from_id(id: &str, auth: &HelixAuth) -> Result<Option<TwitchUser>> {
-    user_from_url(format!("https://api.twitch.tv/helix/users?id={id}"), auth).await
+    get_paginated_value(format!("https://api.twitch.tv/helix/users?id={id}"), auth).await
+}
+pub async fn channel(broadcaster_id: &str, auth: &HelixAuth) -> Result<Option<TwitchChannel>> {
+    get_paginated_value(
+        format!("https://api.twitch.tv/helix/channels?broadcaster_id={broadcaster_id}'"),
+        auth,
+    )
+    .await
+}
+pub async fn stream_from_user_id(user_id: &str, auth: &HelixAuth) -> Result<Option<TwitchStream>> {
+    get_paginated_value(
+        format!("https://api.twitch.tv/helix/streams?user_id={user_id}"),
+        auth,
+    )
+    .await
 }
 
-async fn user_from_url<U: reqwest::IntoUrl>(
+async fn get_paginated_value<T: serde::de::DeserializeOwned, U: reqwest::IntoUrl>(
     url: U,
     auth: &HelixAuth,
-) -> Result<Option<TwitchUser>> {
+) -> Result<Option<T>> {
     let response = Client::new()
         .get(url)
         .header("Client-Id", &auth.client_id)
