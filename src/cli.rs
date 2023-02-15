@@ -15,9 +15,4 @@ pub struct Cli {
     pub store: Option<String>,
     #[arg(long)]
     pub reauth: bool,
-
-    #[arg(short, long)]
-    pub chat: bool,
-    #[arg(short, long)]
-    pub eventsub: bool,
 }

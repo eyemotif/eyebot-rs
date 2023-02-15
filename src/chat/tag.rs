@@ -78,6 +78,9 @@ pub fn tags<T: Tags>(raw_tags: &[Tag]) -> Option<T> {
 }
 
 fn emote_tag_to_emotes(emotes: Option<Option<String>>) -> Vec<EmoteInfo> {
+    if emotes == Some(Some(String::new())) {
+        return Vec::new();
+    };
     // format: emote1-id:start1-end1,start2-end2/emote2-id...
     emotes
         .map(|emotes| {

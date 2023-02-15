@@ -4,6 +4,7 @@ use crate::chat;
 use crate::eventsub;
 use crate::twitch;
 use error::BotError;
+use tokio::sync::mpsc;
 
 pub mod data;
 pub mod error;
@@ -14,6 +15,7 @@ pub struct Bot {
     chat_client: chat::client::ChatClient,
     eventsub_client: eventsub::client::EventsubClient,
     interface: interface::BotInterface,
+    error_listener: mpsc::Receiver<BotError>,
 }
 
 impl Bot {
@@ -38,11 +40,15 @@ impl Bot {
             access: data.access,
         };
 
+        let (error_sender, error_receiver) = mpsc::channel(1);
+
         Ok(Self {
             interface: interface::BotInterface(std::sync::Arc::new(interface::InterfaceData {
                 helix_auth,
                 chat: chat_client.get_interface(),
+                error_reporter: error_sender,
             })),
+            error_listener: error_receiver,
             chat_client,
             eventsub_client,
         })
@@ -79,10 +85,17 @@ impl Bot {
         }
     }
 
-    pub async fn start(self) -> Result<(), BotError> {
+    pub async fn run(mut self) -> Result<(), BotError> {
         tokio::select! {
             Err(chat_err) = self.chat_client.run() => Err(chat_err.into()),
             Err(eventsub_err) = self.eventsub_client.run() => Err(eventsub_err.into()),
+            received_err = async {
+                let Some(err) = self.error_listener.recv().await else {
+                    loop { tokio::task::yield_now().await; }
+                };
+                self.error_listener.close();
+                err
+            } => Err(received_err),
             else => Ok(())
         }
     }

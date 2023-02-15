@@ -1,6 +1,7 @@
 use crate::eventsub::subscription::Subscription;
 use auth::OAuthToken;
 use clap::Parser;
+use eventsub::event;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -49,93 +50,62 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let chat_task = if args.chat {
-        let chat_client = chat::client::ChatClient::new(chat::data::ChatClientData {
+    let broadcaster_user_id = twitch::user_from_login(
+        "eye_motif",
+        &twitch::HelixAuth {
+            client_id: args.clientid.clone(),
             access: token_manager.clone(),
-            bot_username: String::from("eye___bot"),
-            chat_channel: String::from("eye_motif"),
-        })
-        .await?;
-        tokio::spawn(chat_client.on_chat(|message, bot| async move {
-            if message.user_is_super() && message.text == "!ping" {
-                bot.reply(&message, "Pong!");
-            }
-            if message.text.contains("egg") {
-                bot.say("🥚");
-            }
-            if message.text == "frong" {
-                bot.say("frong");
-            }
-            if !message.emotes.is_empty() {
-                println!(
-                    "message with emotes: {} -> {:?} {:?}",
-                    message.strip_emotes(),
-                    message.text,
-                    message.emotes
-                );
-            }
-        }));
+        },
+    )
+    .await?
+    .expect("Channel exists")
+    .id;
 
-        Some(chat_client.run())
-    } else {
-        None
-    };
+    let bot = bot::Bot::new(bot::data::BotData {
+        client_id: args.clientid,
+        access: token_manager,
+        bot_username: String::from("eye___bot"),
+        chat_channel: String::from("eye_motif"),
+        subscriptions: vec![Subscription::ChannelPointRedeem {
+            broadcaster_user_id: broadcaster_user_id.clone(),
+            reward_id: None,
+        }],
+    })
+    .await?;
 
-    let eventsub_task = if args.eventsub {
-        let broadcaster_user_id = twitch::user_from_login(
-            "eye_motif",
-            &twitch::HelixAuth {
-                client_id: args.clientid.clone(),
-                access: token_manager.clone(),
-            },
-        )
-        .await?
-        .expect("Channel exists")
-        .id;
+    tokio::spawn(bot.on_chat_message(|message, bot| async move {
+        if message.user_is_super() {
+            match message.text.as_str() {
+                "!ping" => bot.reply(&message, "Pong!"),
+                "!shutdown" => return bot.shutdown(),
+                _ => (),
+            }
+        }
+        if message.text.contains("egg") {
+            bot.say("🥚");
+        }
+        if message.text == "frong" {
+            bot.say("frong");
+        }
+        if !message.emotes.is_empty() {
+            println!(
+                "message with emotes: {} -> {:?} {:?}",
+                message.strip_emotes(),
+                message.text,
+                message.emotes
+            );
+        }
+    }));
 
-        let eventsub_client =
-            eventsub::client::EventsubClient::new(eventsub::data::EventsubClientData {
-                client_id: args.clientid.clone(),
-                access: token_manager.clone(),
-                subscriptions: vec![Subscription::ChannelPointRedeem {
-                    broadcaster_user_id,
-                    reward_id: None,
-                }],
-            })
-            .await?;
-        tokio::spawn(
-            eventsub_client.on_event::<eventsub::event::ChannelPointRedeem, _>(
-                |notification| async move {
-                    println!(
-                        "User {} redeemed {}!",
-                        notification.payload.event.user_name,
-                        notification.payload.event.reward.title
-                    );
-                },
-            ),
-        );
-        tokio::spawn(
-            eventsub_client.on_event::<eventsub::event::Subscription, _>(
-                |notification| async move {
-                    println!(
-                        "User {} subscribed for {} months!\n\tMessage: {:?}!",
-                        notification.payload.event.user_name,
-                        notification.payload.event.cumulative_months,
-                        notification.payload.event.message,
-                    );
-                },
-            ),
-        );
-        Some(eventsub_client.run())
-    } else {
-        None
-    };
+    tokio::spawn(
+        bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
+            if notif.payload.event.reward.title == "Pop" {
+                bot.say(format!("{} redeemed Pop!", notif.payload.event.user_name));
+            }
+        }),
+    );
 
-    tokio::select! {
-        Err(err) = async { println!("Running chat client!"); chat_task.unwrap().await }, if chat_task.is_some() => return Err(err.into()),
-        Err(err) = async { println!("Running eventsub client!"); eventsub_task.unwrap().await }, if eventsub_task.is_some() => return Err(err.into()),
-        else => (),
-    }
+    bot.run().await?;
 
     Ok(())
 }
@@ -155,7 +125,6 @@ async fn run_oauth_server(
                     "chat:edit",
                     "channel:read:redemptions",
                     "channel:read:subscriptions",
-                    "bits:read",
                 ]
                 .into_iter()
                 .map(String::from)

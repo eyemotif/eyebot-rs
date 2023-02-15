@@ -21,29 +21,27 @@ impl ChatInterface {
         }))
     }
 
-    pub fn say<S: Into<String>>(&self, message: S) {
-        self.0
-            .irc_client
-            .send(irc::proto::Command::PRIVMSG(
+    pub fn say<S: Into<String>>(&self, message: S) -> irc::error::Result<()> {
+        self.0.irc_client.send(irc::proto::Command::PRIVMSG(
+            format!("#{}", self.0.twitch_channel),
+            message.into(),
+        ))
+    }
+    pub fn reply<S: Into<String>>(
+        &self,
+        target: &ChatMessage,
+        message: S,
+    ) -> irc::error::Result<()> {
+        self.0.irc_client.send(irc::proto::Message {
+            tags: Some(vec![irc::proto::message::Tag(
+                String::from("reply-parent-msg-id"),
+                Some(target.id.clone()),
+            )]),
+            prefix: None,
+            command: irc::proto::Command::PRIVMSG(
                 format!("#{}", self.0.twitch_channel),
                 message.into(),
-            ))
-            .expect("TODO: handle ChatMessage.say() error");
-    }
-    pub fn reply<S: Into<String>>(&self, target: &ChatMessage, message: S) {
-        self.0
-            .irc_client
-            .send(irc::proto::Message {
-                tags: Some(vec![irc::proto::message::Tag(
-                    String::from("reply-parent-msg-id"),
-                    Some(target.id.clone()),
-                )]),
-                prefix: None,
-                command: irc::proto::Command::PRIVMSG(
-                    format!("#{}", self.0.twitch_channel),
-                    message.into(),
-                ),
-            })
-            .expect("TODO: handle ChatMessage.reply() error");
+            ),
+        })
     }
 }
