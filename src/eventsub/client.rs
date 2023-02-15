@@ -90,6 +90,10 @@ impl EventsubClient {
         Ok(())
     }
 
+    pub fn subscribe(&self) -> watch::Receiver<serde_json::Value> {
+        self.interface.subscribe()
+    }
+
     async fn handle_messages(mut self) -> Result<(), EventsubError> {
         while let Some(message) = self
             .websocket

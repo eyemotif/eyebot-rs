@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub mod auth;
+pub mod bot;
 pub mod chat;
 mod cli;
 pub mod eventsub;

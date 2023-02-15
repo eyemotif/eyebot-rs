@@ -65,6 +65,13 @@ impl ChatClient {
         Ok(())
     }
 
+    pub fn get_interface(&self) -> ChatInterface {
+        self.interface.clone()
+    }
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<ChatMessage> {
+        self.interface.0.message_channel.subscribe()
+    }
+
     async fn handle_chat_messages(mut self) -> Result<(), ChatClientError> {
         while let Some(message) = self.stream.next().await.transpose()? {
             match message.command {
