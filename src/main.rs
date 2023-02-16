@@ -119,7 +119,7 @@ async fn run_oauth_server(
         Some(oauth) => Ok(OAuthToken(oauth)),
         None => {
             println!("No OAuth provided. Starting server at http:://localhost:3000 ...");
-            let auth_server = auth::oauth::OAuthServer::start_auth(auth::OAuthServerData {
+            let oauth = auth::oauth::oauth_server(auth::OAuthServerData {
                 client_id,
                 scopes: [
                     "chat:read",
@@ -132,9 +132,9 @@ async fn run_oauth_server(
                 .collect(),
                 host_address: String::from("localhost:3000"),
                 response_path: String::from("/response"),
-            });
+            })
+            .await?;
 
-            let oauth = auth_server.into_inner().await.unwrap()?;
             println!("Success! Server closed.");
             Ok(oauth)
         }

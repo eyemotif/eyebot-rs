@@ -1,3 +1,4 @@
+//! Interface to handle Twitch's OAuth-driven authentification.
 use super::creds::Credentials;
 use super::error::AccessTokenManagerError;
 use super::{AccessTokenManagerOAuth, AccessTokenManagerTokens};
@@ -7,6 +8,9 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+/// The data to provide Access Tokens to various Twitch interfaces.
+///
+/// Can be reused by cloning.
 #[derive(Debug, Clone)]
 pub struct AccessTokenManager {
     creds: Arc<RwLock<Credentials>>,
@@ -29,6 +33,16 @@ struct TokenValidationResponse {
 }
 
 impl AccessTokenManager {
+    /// Creates a new `TokenRequestResponse` using an OAuth token to create new
+    /// Access and Refresh tokens.
+    ///
+    /// # Errors
+    /// Returns `Err(AccessTokenManagerError...)`:
+    /// * `::Net` if a response was not received from Twitch.
+    /// * `::OnRequest` if Twitch denied the request to create new Access
+    /// and Refresh tokens.
+    /// * `::IO` if the Access and Refresh tokens were not written to Disk.
+    /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn new_oauth(data: AccessTokenManagerOAuth) -> Result<Self, AccessTokenManagerError> {
         let client = reqwest::Client::new();
         let response = client
@@ -68,6 +82,22 @@ impl AccessTokenManager {
         Ok(manager)
     }
 
+    /// Creates a new `TokenRequestResponse` using existing Access and Refresh
+    /// tokens to validate and refresh them.
+    ///
+    /// # Errors
+    /// Returns `Err(AccessTokenManagerError...)`:
+    /// * `::InvalidTokens` if the Access and Refresh do not exist on Disk.
+    /// * `::IO` if the Access and Refresh tokens were not read from or written
+    ///   to Disk, or could not be parsed from the file on
+    /// * `::Net` if a response was not received from Twitch.
+    /// * `::OnValidate` if Twitch denied the request to validate the Access and
+    ///   Refresh tokens.
+    /// * `::InvalidValidateResponse` if Twitch sent a malformed response to the
+    ///   validation request.
+    /// * `::OnRefresh` if Twitch denied the request to refresh the Access and
+    ///   Refresh tokens.
+    /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn new_tokens(
         data: AccessTokenManagerTokens,
     ) -> Result<Self, AccessTokenManagerError> {
@@ -96,13 +126,24 @@ impl AccessTokenManager {
             client_secret: Arc::new(data.client_secret),
             token_store: data.tokens_store_path,
         };
-        if manager.validate().await? {
-            Ok(manager)
-        } else {
-            Err(AccessTokenManagerError::InvalidTokens)
+
+        if !manager.validate().await? {
+            manager.refresh().await?;
         }
+        Ok(manager)
     }
 
+    /// Sends a validation request to Twitch. Returns `Ok(true)` if the stored Access
+    /// and Refresh tokens are valid, and `Ok(false)` if they are not.
+    ///
+    /// # Errors
+    /// Returns `Err(AccessTokenManagerError...)`:
+    /// * `::Net` if a response was not received from Twitch.
+    /// * `::OnValidate` if Twitch denied the request to validate the Access and
+    ///   Refresh tokens.
+    /// * `::InvalidValidateResponse` if Twitch sent a malformed response to the
+    ///   validation request.
+    /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn validate(&self) -> Result<bool, AccessTokenManagerError> {
         let response = reqwest::Client::new()
             .get("https://id.twitch.tv/oauth2/validate")
@@ -137,6 +178,14 @@ impl AccessTokenManager {
         }
     }
 
+    /// Sends a refresh request to Twitch.
+    ///
+    /// # Errors
+    /// Returns `Err(AccessTokenManagerError...)`:
+    /// * `::Net` if a response was not received from Twitch.
+    /// * `::OnRefresh` if Twitch denied the request to refresh the Access and
+    ///   Refresh tokens.
+    /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn refresh(&self) -> Result<(), AccessTokenManagerError> {
         let response = reqwest::Client::new()
             .post(
@@ -169,9 +218,29 @@ impl AccessTokenManager {
         Ok(())
     }
 
+    /// Gives a direct [RwLockReadGuard](std::sync::RwLockReadGuard) to the [Credentials] stored internally.
+    ///
+    /// Note that these [Credentials] are not guaranteed to be valid, and as
+    /// long as the [RwLockReadGuard](std::sync::RwLockReadGuard) is held, they
+    /// can never be refreshed.
     pub fn read_credentials_unvalidated(&self) -> std::sync::RwLockReadGuard<'_, Credentials> {
         self.creds.read().unwrap()
     }
+    /// Gives a valid copy of the internal [Credentials]. The credentials
+    /// returned are guaranteed to be valid at the moment they are returned.
+    ///
+    /// If the internal [Credentials] are not valid at the moment this method is
+    /// called, they will be refreshed, and the refreshed [Credentials] will be returned.
+    ///
+    /// # Errors
+    /// * `::Net` if a response was not received from Twitch.
+    /// * `::OnValidate` if Twitch denied the request to validate the Access and
+    ///   Refresh tokens.
+    /// * `::InvalidValidateResponse` if Twitch sent a malformed response to the
+    ///   validation request.
+    /// * `::OnRefresh` if Twitch denied the request to refresh the Access and
+    ///   Refresh tokens.
+    /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn get_credentials(&self) -> Result<Credentials, AccessTokenManagerError> {
         if self.validate().await? {
             Ok(self.read_credentials_unvalidated().clone())
@@ -204,43 +273,3 @@ impl AccessTokenManager {
     }
 }
 
-impl std::fmt::Display for AccessTokenManagerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AccessTokenManagerError::Net(err) => {
-                f.write_fmt(format_args!("Error sending a request to Twitch: {err}"))
-            }
-
-            AccessTokenManagerError::BadData(err) => {
-                f.write_fmt(format_args!("Error parsing a response from Twitch: {err}"))
-            }
-            AccessTokenManagerError::OnRequest(err) => f.write_fmt(format_args!(
-                "Error {} requesting an Access Token from Twitch: {}",
-                err.status, err.message
-            )),
-            AccessTokenManagerError::OnValidate(err) => f.write_fmt(format_args!(
-                "Error {} validating an Access Token: {}",
-                err.status, err.message
-            )),
-            AccessTokenManagerError::OnRefresh(err) => f.write_fmt(format_args!(
-                "Error {} refreshing an Access Token: {}",
-                err.status, err.message
-            )),
-            AccessTokenManagerError::InvalidValidateResponse => f.write_str(
-                "The Client Id given in a token validation did not match the given Client Id.",
-            ),
-            AccessTokenManagerError::InvalidTokens => {
-                f.write_str("The given Access and/or Refresh Tokens were invalid.")
-            }
-            AccessTokenManagerError::IO(err) => f.write_fmt(format_args!(
-                "Error accessing the Access/Refresh Tokens' store file': {err}",
-            )),
-        }
-    }
-}
-impl std::error::Error for AccessTokenManagerError {}
-impl From<std::io::Error> for AccessTokenManagerError {
-    fn from(value: std::io::Error) -> Self {
-        AccessTokenManagerError::IO(value)
-    }
-}
