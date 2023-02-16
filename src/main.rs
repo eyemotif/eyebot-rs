@@ -10,6 +10,7 @@ pub mod bot;
 pub mod chat;
 mod cli;
 pub mod eventsub;
+pub mod eye;
 pub mod twitch;
 
 #[tokio::main]
