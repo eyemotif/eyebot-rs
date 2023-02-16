@@ -38,7 +38,7 @@ pub async fn oauth_server(options: OAuthServerData) -> ClientResult {
 
                     request.respond(Response::new(
                         StatusCode(308),
-                        vec![tiny_http::Header::from_bytes("Location".as_bytes(), url).unwrap()],
+                        vec![tiny_http::Header::from_bytes("Location", url).unwrap(), tiny_http::Header::from_bytes("Cache-Control", "no-store").unwrap()],
                         "Redirecting...".as_bytes(),
                         None,
                         None,
@@ -107,8 +107,8 @@ fn respond_code(code: u16, description: &str) -> Response<&[u8]> {
     Response::new(
         StatusCode(code),
         vec![
-            tiny_http::Header::from_bytes("Content-Type".as_bytes(), "text/plain".as_bytes())
-                .unwrap(),
+            tiny_http::Header::from_bytes("Content-Type", "text/plain").unwrap(),
+            tiny_http::Header::from_bytes("Cache-Control", "no-store").unwrap(),
         ],
         description.as_bytes(),
         Some(description.len()),
