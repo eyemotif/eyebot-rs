@@ -48,9 +48,9 @@ impl AccessTokenManager {
         let response = client
             .post(
                 // cargo fmt doesn't format huge strings
-                String::from("https://id.twitch.tv/oauth2/token?grant_type=authorization_code&")
+                String::from("https://id.twitch.tv/oauth2/token?grant_type=authorization_code")
                     + &format!(
-                        "client_id={}&client_secret={}&code={}&redirect_uri={}",
+                        "&client_id={}&client_secret={}&code={}&redirect_uri={}",
                         data.client_id, data.client_secret, data.oauth.0, data.redirect_url
                     ),
             )
@@ -191,7 +191,7 @@ impl AccessTokenManager {
             .post(
                 String::from("https://id.twitch.tv/oauth2/token?grant_type=refresh_token")
                     + &format!(
-                        "refresh_token={}&client_id={}&client_secret={}",
+                        "&refresh_token={}&client_id={}&client_secret={}",
                         self.creds.read().unwrap().refresh_token,
                         self.client_id,
                         self.client_secret
@@ -272,4 +272,3 @@ impl AccessTokenManager {
         }
     }
 }
-

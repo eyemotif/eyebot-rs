@@ -58,13 +58,13 @@ impl Bot {
         &self,
         mut f: impl FnMut(crate::chat::data::ChatMessage, interface::BotInterface) -> Fut,
     ) -> impl Future<Output = ()> {
-        let interface = self.interface.clone();
+        let interface = self.interface.0.clone();
         let mut receiver = self.chat_client.subscribe();
 
         async move {
             while receiver.changed().await.is_ok() {
                 let chat_message = receiver.borrow().clone();
-                f(chat_message, interface.clone()).await;
+                f(chat_message, interface::BotInterface(interface.clone())).await;
             }
         }
     }
@@ -72,14 +72,14 @@ impl Bot {
         &self,
         mut f: impl FnMut(crate::eventsub::data::NotificationMessage<E>, interface::BotInterface) -> Fut,
     ) -> impl Future<Output = ()> {
-        let interface = self.interface.clone();
+        let interface = self.interface.0.clone();
         let mut receiver = self.eventsub_client.subscribe();
 
         async move {
             while receiver.changed().await.is_ok() {
                 let value = receiver.borrow().clone();
                 if let Ok(value) = serde_json::from_value(value) {
-                    f(value, interface.clone()).await;
+                    f(value, interface::BotInterface(interface.clone())).await;
                 }
             }
         }

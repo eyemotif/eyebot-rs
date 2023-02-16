@@ -4,7 +4,7 @@ use super::error::BotError;
 use crate::chat::interface::ChatInterface;
 use crate::twitch::HelixAuth;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BotInterface(pub(super) Arc<InterfaceData>);
 
 #[derive(Debug)]
@@ -17,7 +17,6 @@ pub struct InterfaceData {
 impl BotInterface {
     pub async fn say<S: Into<String>>(&self, message: S) {
         if let Err(err) = self.0.chat.say(message) {
-            // TODO: stop sending on error
             let _ = self.0.error_reporter.send(BotError::Say(err)).await;
         }
     }
@@ -27,16 +26,13 @@ impl BotInterface {
         message: S,
     ) {
         if let Err(err) = self.0.chat.reply(target, message) {
-            // TODO: stop sending on error
             let _ = self.0.error_reporter.send(BotError::Say(err)).await;
         }
     }
     pub async fn shutdown(self) {
-        // TODO: stop sending on error
         let _ = self.0.error_reporter.send(BotError::Close).await;
     }
     pub async fn error<S: Into<String>>(&self, error: S) {
-        // TODO: stop sending on error
         let _ = self
             .0
             .error_reporter
