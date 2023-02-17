@@ -74,29 +74,32 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
 
-    tokio::spawn(bot.on_chat_message(|message, bot| async move {
-        if message.user_is_super() {
-            match message.text.as_str() {
-                "!ping" => bot.reply(&message, "Pong!").await,
-                "!shutdown" => return bot.shutdown().await,
-                _ => (),
-            }
-        }
-        if message.text.contains("egg") {
-            bot.say("🥚").await;
-        }
-        if message.text == "frong" {
-            bot.say("frong").await;
-        }
-        if !message.emotes.is_empty() {
-            println!(
-                "message with emotes: {} -> {:?} {:?}",
-                message.strip_emotes(),
-                message.text,
-                message.emotes
-            );
-        }
-    }));
+    // tokio::spawn(bot.on_chat_message(|message, bot| async move {
+    //     if message.user_is_super() {
+    //         match message.text.as_str() {
+    //             "!ping" => bot.reply(&message, "Pong!").await,
+    //             "!shutdown" => return bot.shutdown().await,
+    //             _ => (),
+    //         }
+    //     }
+    //     if message.text.contains("egg") {
+    //         bot.say("🥚").await;
+    //     }
+    //     if message.text == "frong" {
+    //         bot.say("frong").await;
+    //     }
+    //     if !message.emotes.is_empty() {
+    //         println!(
+    //             "message with emotes: {} -> {:?} {:?}",
+    //             message.strip_emotes(),
+    //             message.text,
+    //             message.emotes
+    //         );
+    //     }
+    // }));
+
+    let stored_commands = eye::Store::new();
+    tokio::spawn(stored_commands.register_base_commands(&bot));
 
     tokio::spawn(
         bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
