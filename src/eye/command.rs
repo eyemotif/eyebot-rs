@@ -51,9 +51,15 @@ impl CommandRules {
                                 current_word.chars().skip(2).collect()
                             } else {
                                 current_word
-                            },
+                            } + " ",
                         ));
                         current_word = String::new();
+                    }
+                }
+                '%' if !escape => {
+                    if !(current_word.starts_with("%") || current_word.starts_with("&")) {
+                        output.body.push(CommandSection::Echo(current_word + ""));
+                        current_word = String::from("%");
                     }
                 }
                 '\\' => {
@@ -64,7 +70,16 @@ impl CommandRules {
                         continue;
                     }
                 }
-                chr => current_word.push(chr),
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '=' | '_' => current_word.push(chr),
+                misc_chr => {
+                    if let Some(var_string) = current_word.strip_prefix('%') {
+                        output.body.push(CommandRules::var_from_string(var_string)?);
+                        current_word.clear();
+                        current_word.push(misc_chr)
+                    } else {
+                        current_word.push(misc_chr)
+                    }
+                }
             }
             escape = false;
         }
@@ -104,7 +119,7 @@ impl CommandRules {
             })
         }
 
-        let message = message.join(" ");
+        let message = message.join("");
         for tag in &self.tags {
             match tag {
                 CommandTag::Reply => bot.reply(msg, message).await,
@@ -122,7 +137,7 @@ impl CommandRules {
         true
     }
 
-    pub fn as_words(&self) -> Vec<String> {
+    pub fn as_words_string(&self) -> String {
         self.tags
             .iter()
             .filter_map(|tag| match tag {

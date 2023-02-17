@@ -49,7 +49,6 @@ pub fn register_base_commands(
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:info") {
                     let command_name = command_name.trim();
                     if let Some(body) = data.read().await.commands.get(command_name) {
-                        let words = body.as_words();
                         bot.reply(
                             &msg,
                             format!(
@@ -58,7 +57,7 @@ pub fn register_base_commands(
                                 if body.is_const() {
                                     String::from("&CONST")
                                 } else {
-                                    words.join(" ")
+                                    body.as_words_string()
                                 }
                             ),
                         )
