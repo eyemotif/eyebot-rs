@@ -18,6 +18,7 @@ pub enum CommandTag {
     Reply,
     Builtin,
     Super,
+    Temporary,
 }
 #[derive(Debug)]
 pub enum RulesError {
@@ -147,7 +148,9 @@ impl CommandRules {
                 CommandTag::Reply => Some(String::from("&REPLY")),
                 CommandTag::Builtin => None,
                 CommandTag::Super => Some(String::from("&SUPER")),
+                CommandTag::Temporary => Some(String::from("&TEMP")),
             })
+            .map(|tag| tag + " ")
             .chain(self.body.iter().map(|sec| match sec {
                 CommandSection::Echo(txt) => String::from(txt),
                 CommandSection::ChatterName => String::from("%name"),
@@ -159,6 +162,10 @@ impl CommandRules {
     #[must_use]
     pub fn is_builtin(&self) -> bool {
         self.tags.contains(&CommandTag::Builtin)
+    }
+    #[must_use]
+    pub fn is_temporary(&self) -> bool {
+        self.tags.contains(&CommandTag::Temporary)
     }
 
     fn var_from_string(input: &str) -> Result<CommandSection, RulesError> {
@@ -177,6 +184,7 @@ impl CommandRules {
         Ok(match input {
             "REPLY" => CommandTag::Reply,
             "SUPER" => CommandTag::Super,
+            "TEMP" => CommandTag::Temporary,
             input => return Err(RulesError::BadTag(String::from(input))),
         })
     }

@@ -67,16 +67,21 @@ pub fn register_base_commands(
                     }
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:remove") {
                     let command_name = command_name.trim();
-                    if let Some(to_remove) = data.read().await.commands.get(command_name) {
+                    let mut data_write = data.write().await;
+                    if let Some((command_name, to_remove)) =
+                        data_write.commands.remove_entry(command_name)
+                    {
                         if to_remove.is_builtin() {
                             bot.reply(
                                 &msg,
                                 format!("Cannot remove a builtin cmd {command_name:?}"),
                             )
                             .await;
+                            data_write.commands.insert(command_name, to_remove);
                             return;
                         }
-                        data.write().await.commands.remove(command_name);
+
+                        drop(data_write);
                         tokio::spawn(io::refresh(data.clone()));
                     } else {
                         bot.reply(&msg, format!("Unknown command {command_name:?}"))

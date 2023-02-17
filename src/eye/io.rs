@@ -11,7 +11,8 @@ pub(super) async fn refresh(data: Arc<RwLock<super::StoreData>>) -> std::io::Res
         data.commands
             .iter()
             .filter_map(|(k, v)| {
-                (!v.is_builtin()).then_some(format!("{k} {}", v.as_words_string()))
+                (!v.is_builtin() && !v.is_temporary())
+                    .then_some(format!("{k} {}", v.as_words_string()))
             })
             .collect::<Vec<_>>()
             .join("\n"),
