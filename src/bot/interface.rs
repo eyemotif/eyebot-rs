@@ -39,7 +39,7 @@ impl BotInterface {
             .send(BotError::Custom(error.into()))
             .await;
     }
-    pub fn helix_auth(&self) -> &HelixAuth {
+    #[must_use] pub fn helix_auth(&self) -> &HelixAuth {
         &self.0.helix_auth
     }
 }

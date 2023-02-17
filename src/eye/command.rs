@@ -57,7 +57,7 @@ impl CommandRules {
                     }
                 }
                 '%' if !escape => {
-                    if !(current_word.starts_with("%") || current_word.starts_with("&")) {
+                    if !(current_word.starts_with('%') || current_word.starts_with('&')) {
                         output.body.push(CommandSection::Echo(current_word + ""));
                         current_word = String::from("%");
                     }
@@ -87,6 +87,7 @@ impl CommandRules {
         Ok(output)
     }
 
+    #[must_use]
     pub fn empty_builtin() -> Self {
         Self {
             body: Vec::new(),
@@ -130,6 +131,7 @@ impl CommandRules {
         bot.say(message).await;
     }
 
+    #[must_use]
     pub fn can_run(&self, msg: &ChatMessage, _bot: &BotInterface) -> bool {
         if self.tags.contains(&CommandTag::Super) && !msg.user_is_super() {
             return false;
@@ -137,6 +139,7 @@ impl CommandRules {
         true
     }
 
+    #[must_use]
     pub fn as_words_string(&self) -> String {
         self.tags
             .iter()
@@ -153,6 +156,7 @@ impl CommandRules {
             .collect()
     }
 
+    #[must_use]
     pub fn is_builtin(&self) -> bool {
         self.tags.contains(&CommandTag::Builtin)
     }

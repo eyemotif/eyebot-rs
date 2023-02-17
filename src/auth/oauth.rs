@@ -11,7 +11,7 @@ type ClientResult = std::result::Result<OAuthToken, OAuthServerError>;
 /// Runs an HTTP server to request a new Twitch OAuth token from the user.
 ///
 /// # Errors
-/// Returns an [OAuthServerError] if the server failed to obtain an OAuth token.
+/// Returns an [`OAuthServerError`] if the server failed to obtain an OAuth token.
 pub async fn oauth_server(options: OAuthServerData) -> ClientResult {
     let server =
         tiny_http::Server::http(&options.host_address).map_err(OAuthServerError::OnServerCreate)?;

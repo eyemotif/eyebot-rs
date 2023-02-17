@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 /// The Access and Refresh tokens currently being managed by an
-/// [AccessTokenManager](super::access::AccessTokenManager).
+/// [`AccessTokenManager`](super::access::AccessTokenManager).
 ///
-/// Optionally contains an [OAuthToken] if the other tokens were created using one.
+/// Optionally contains an [`OAuthToken`] if the other tokens were created using one.
 #[derive(Debug, Clone)]
 pub struct Credentials {
     pub oauth: Option<OAuthToken>,
@@ -15,7 +15,7 @@ pub struct Credentials {
 #[derive(Debug, Clone)]
 pub struct OAuthToken(pub String);
 
-/// The data needed to call [AccessTokenManager::new_oauth()](super::access::AccessTokenManager).
+/// The data needed to call [`AccessTokenManager::new_oauth`()](super::access::AccessTokenManager).
 #[derive(Debug)]
 pub struct AccessTokenManagerOAuth {
     /// A valid [OAuth Token](OAuthToken).
@@ -30,7 +30,7 @@ pub struct AccessTokenManagerOAuth {
     /// The path on Disk to write the Access and Refresh tokens to.
     pub tokens_store_path: PathBuf,
 }
-/// The data needed to call [AccessTokenManager::new_tokens()](super::access::AccessTokenManager).
+/// The data needed to call [`AccessTokenManager::new_tokens`()](super::access::AccessTokenManager).
 #[derive(Debug)]
 pub struct AccessTokenManagerTokens {
     /// The app's [Client ID](https://dev.twitch.tv/docs/authentication/register-app/).

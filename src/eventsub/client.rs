@@ -176,6 +176,6 @@ impl EventsubClient {
             }
         }
 
-        return Err(EventsubError::WelcomeIncomplete);
+        Err(EventsubError::WelcomeIncomplete)
     }
 }

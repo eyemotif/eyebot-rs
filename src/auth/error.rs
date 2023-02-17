@@ -18,7 +18,7 @@ pub enum OAuthServerError {
     Ring(ring::error::Unspecified),
 }
 
-/// An Error returned by an [AccessTokenManager](super::access::AccessTokenManager).
+/// An Error returned by an [`AccessTokenManager`](super::access::AccessTokenManager).
 #[derive(Debug)]
 pub enum AccessTokenManagerError {
     /// An error returned while making a GET or POST request.

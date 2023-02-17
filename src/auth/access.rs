@@ -218,10 +218,10 @@ impl AccessTokenManager {
         Ok(())
     }
 
-    /// Gives a direct [RwLockReadGuard](std::sync::RwLockReadGuard) to the [Credentials] stored internally.
+    /// Gives a direct [`RwLockReadGuard`](std::sync::RwLockReadGuard) to the [Credentials] stored internally.
     ///
     /// Note that these [Credentials] are not guaranteed to be valid, and as
-    /// long as the [RwLockReadGuard](std::sync::RwLockReadGuard) is held, they
+    /// long as the [`RwLockReadGuard`](std::sync::RwLockReadGuard) is held, they
     /// can never be refreshed.
     pub fn read_credentials_unvalidated(&self) -> std::sync::RwLockReadGuard<'_, Credentials> {
         self.creds.read().unwrap()

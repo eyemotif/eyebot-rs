@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 mod builtin;
-pub mod command;
+mod command;
 mod io;
 
 #[derive(Debug)]

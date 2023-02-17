@@ -6,7 +6,7 @@ use serde::Deserialize;
 /// Trait is sealed.
 pub trait Event: DeserializeOwned + sealed::Sealed {}
 mod sealed {
-    use super::*;
+    use super::{ChannelPointRedeem, Raid, StreamOnline, Subscription};
     pub trait Sealed {}
     impl Sealed for ChannelPointRedeem {}
     impl Sealed for Subscription {}
@@ -71,7 +71,7 @@ pub struct SubscriptionEmote {
 }
 
 impl SubscriptionMessage {
-    pub fn get_emote_info(&self) -> Vec<crate::chat::data::EmoteInfo> {
+    #[must_use] pub fn get_emote_info(&self) -> Vec<crate::chat::data::EmoteInfo> {
         let mut map = HashMap::<String, Vec<(u16, u16)>>::new();
         for emote in &self.emotes {
             if let Some(emote_locs) = map.get_mut(&emote.id) {

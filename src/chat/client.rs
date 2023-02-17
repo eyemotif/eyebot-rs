@@ -19,7 +19,6 @@ pub struct ChatClient {
 }
 
 impl ChatClient {
-    #[must_use]
     pub async fn new(data: super::data::ChatClientData) -> Result<Self, ChatClientError> {
         let mut client = Client::from_config(irc::client::prelude::Config {
             owners: vec![String::from("eyebot-rs")],
@@ -65,10 +64,10 @@ impl ChatClient {
         Ok(())
     }
 
-    pub fn get_interface(&self) -> ChatInterface {
+    #[must_use] pub fn get_interface(&self) -> ChatInterface {
         self.interface.clone()
     }
-    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<ChatMessage> {
+    #[must_use] pub fn subscribe(&self) -> tokio::sync::watch::Receiver<ChatMessage> {
         self.interface.0.message_channel.subscribe()
     }
 

@@ -52,9 +52,6 @@ pub fn register_base_commands(
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:info") {
                     let command_name = command_name.trim();
                     if let Some(body) = data.read().await.commands.get(command_name) {
-                        if body.is_builtin() {
-                        } else {
-                        }
                         bot.reply(
                             &msg,
                             if body.is_builtin() {
@@ -65,7 +62,7 @@ pub fn register_base_commands(
                         )
                         .await;
                     } else {
-                        bot.reply(&msg, format!("Unknown command {:?}", command_name))
+                        bot.reply(&msg, format!("Unknown command {command_name:?}"))
                             .await;
                     }
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:remove") {
@@ -82,7 +79,7 @@ pub fn register_base_commands(
                         data.write().await.commands.remove(command_name);
                         tokio::spawn(io::refresh(data.clone()));
                     } else {
-                        bot.reply(&msg, format!("Unknown command {:?}", command_name))
+                        bot.reply(&msg, format!("Unknown command {command_name:?}"))
                             .await;
                     }
                 } else if msg.text.starts_with("!shutdown") {
@@ -125,11 +122,7 @@ pub fn register_base_commands(
                         }
 
                         command
-                            .execute(
-                                args.into_iter().copied().map(String::from).collect(),
-                                &msg,
-                                &bot,
-                            )
+                            .execute(args.iter().copied().map(String::from).collect(), &msg, &bot)
                             .await;
                     }
                 }
