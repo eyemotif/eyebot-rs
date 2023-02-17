@@ -10,7 +10,9 @@ pub(super) async fn refresh(data: Arc<RwLock<super::StoreData>>) -> std::io::Res
         data.store_path.join("commands.txt"),
         data.commands
             .iter()
-            .filter_map(|(k, v)| (!v.is_const()).then_some(format!("{k} {}", v.as_words_string())))
+            .filter_map(|(k, v)| {
+                (!v.is_builtin()).then_some(format!("{k} {}", v.as_words_string()))
+            })
             .collect::<Vec<_>>()
             .join("\n"),
     );

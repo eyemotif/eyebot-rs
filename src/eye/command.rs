@@ -16,7 +16,7 @@ pub enum CommandSection {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum CommandTag {
     Reply,
-    Const,
+    Builtin,
     Super,
 }
 #[derive(Debug)]
@@ -87,10 +87,10 @@ impl CommandRules {
         Ok(output)
     }
 
-    pub fn empty_const() -> Self {
+    pub fn empty_builtin() -> Self {
         Self {
             body: Vec::new(),
-            tags: HashSet::from_iter([CommandTag::Const]),
+            tags: HashSet::from_iter([CommandTag::Builtin]),
         }
     }
 
@@ -142,7 +142,7 @@ impl CommandRules {
             .iter()
             .filter_map(|tag| match tag {
                 CommandTag::Reply => Some(String::from("&REPLY")),
-                CommandTag::Const => None,
+                CommandTag::Builtin => None,
                 CommandTag::Super => Some(String::from("&SUPER")),
             })
             .chain(self.body.iter().map(|sec| match sec {
@@ -153,8 +153,8 @@ impl CommandRules {
             .collect()
     }
 
-    pub fn is_const(&self) -> bool {
-        self.tags.contains(&CommandTag::Const)
+    pub fn is_builtin(&self) -> bool {
+        self.tags.contains(&CommandTag::Builtin)
     }
 
     fn var_from_string(input: &str) -> Result<CommandSection, RulesError> {

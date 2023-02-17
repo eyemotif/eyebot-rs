@@ -20,9 +20,12 @@ pub fn register_base_commands(
                         if let Some(existing_command) =
                             data.clone().read().await.commands.get(command_name)
                         {
-                            if existing_command.is_const() {
-                                bot.reply(&msg, format!("Cannot set a const cmd {command_name:?}"))
-                                    .await;
+                            if existing_command.is_builtin() {
+                                bot.reply(
+                                    &msg,
+                                    format!("Cannot set a builtin cmd {command_name:?}"),
+                                )
+                                .await;
                                 return;
                             }
                         }
@@ -49,17 +52,16 @@ pub fn register_base_commands(
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:info") {
                     let command_name = command_name.trim();
                     if let Some(body) = data.read().await.commands.get(command_name) {
+                        if body.is_builtin() {
+                        } else {
+                        }
                         bot.reply(
                             &msg,
-                            format!(
-                                "!{}: {}",
-                                command_name,
-                                if body.is_const() {
-                                    String::from("&CONST")
-                                } else {
-                                    body.as_words_string()
-                                }
-                            ),
+                            if body.is_builtin() {
+                                format!("!{command_name} is a builtin command")
+                            } else {
+                                format!("!{command_name}: {}", body.as_words_string())
+                            },
                         )
                         .await;
                     } else {
@@ -69,9 +71,12 @@ pub fn register_base_commands(
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:remove") {
                     let command_name = command_name.trim();
                     if let Some(to_remove) = data.read().await.commands.get(command_name) {
-                        if to_remove.is_const() {
-                            bot.reply(&msg, format!("Cannot remove a const cmd {command_name:?}"))
-                                .await;
+                        if to_remove.is_builtin() {
+                            bot.reply(
+                                &msg,
+                                format!("Cannot remove a builtin cmd {command_name:?}"),
+                            )
+                            .await;
                             return;
                         }
                         data.write().await.commands.remove(command_name);
@@ -80,6 +85,9 @@ pub fn register_base_commands(
                         bot.reply(&msg, format!("Unknown command {:?}", command_name))
                             .await;
                     }
+                } else if msg.text.starts_with("!shutdown") {
+                    bot.shutdown().await;
+                    return;
                 }
             }
         })),
@@ -112,10 +120,10 @@ pub fn register_base_commands(
                     let words = command.trim().split(' ').collect::<Vec<_>>();
                     let [cmd, args @ ..] = words.as_slice() else { return; };
                     if let Some(command) = data.read().await.commands.get(*cmd) {
-                        if !command.can_run(&msg, &bot) {
+                        if !command.can_run(&msg, &bot) || command.is_builtin() {
                             return;
                         }
-                        
+
                         command
                             .execute(
                                 args.into_iter().copied().map(String::from).collect(),
@@ -132,10 +140,10 @@ pub fn register_base_commands(
     let data = store.0.clone();
     async move {
         let mut data = data.write().await;
-        for builtin in ["cmd:set", "commands", "cmd:info", "cmd:remove"] {
+        for builtin in ["cmd:set", "commands", "cmd:info", "cmd:remove", "shutdown"] {
             data.commands.insert(
                 String::from(builtin),
-                super::command::CommandRules::empty_const(),
+                super::command::CommandRules::empty_builtin(),
             );
         }
         drop(data);
