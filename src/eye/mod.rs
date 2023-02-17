@@ -1,32 +1,39 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+
 pub mod command;
+mod io;
 
 #[derive(Debug)]
-pub struct Store(Arc<Mutex<StoreData>>);
+pub struct Store(Arc<RwLock<StoreData>>);
 
 #[derive(Debug)]
 struct StoreData {
+    pub store_path: PathBuf,
     pub commands: HashMap<String, command::CommandRules>,
 }
 
 impl Store {
-    pub fn new() -> Self {
-        Store(Arc::new(Mutex::new(StoreData {
+    pub async fn new<P: Into<PathBuf>>(store_path: P) -> std::io::Result<Self> {
+        let store = Store(Arc::new(RwLock::new(StoreData {
             commands: HashMap::from_iter(
                 ["cmd:set", "commands", "cmd:info"]
                     .map(|k| (String::from(k), command::CommandRules::empty_const())),
             ),
-        })))
+            store_path: store_path.into(),
+        })));
+        io::load(store.0.clone()).await?;
+        Ok(store)
     }
     pub fn register_base_commands(
         &self,
         bot: &crate::bot::Bot,
     ) -> impl std::future::Future<Output = ()> + 'static {
         let data_mod = self.0.clone();
-        let data_com = data_mod.clone();
-        let data_cus = data_mod.clone();
+        let data_com = self.0.clone();
+        let data_cus = self.0.clone();
         let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 3] = [
             Box::pin(bot.on_chat_message(move |msg, bot| {
                 let data = data_mod.clone();
@@ -37,7 +44,7 @@ impl Store {
                     if let Some(command) = msg.text.strip_prefix("!cmd:set") {
                         if let Some((command_name, command_body)) = command.trim().split_once(' ') {
                             if let Some(existing_command) =
-                                data.clone().lock().await.commands.get(command_name)
+                                data.clone().read().await.commands.get(command_name)
                             {
                                 if existing_command.is_const() {
                                     bot.reply(
@@ -50,10 +57,11 @@ impl Store {
                             }
                             match command::CommandRules::parse(command_body) {
                                 Ok(body) => {
-                                    data.lock()
+                                    data.write()
                                         .await
                                         .commands
                                         .insert(String::from(command_name), body);
+                                    tokio::spawn(io::refresh(data.clone()));
                                 }
                                 Err(err) => {
                                     bot.reply(&msg, format!("Could not create command: {err}"))
@@ -69,7 +77,7 @@ impl Store {
                         }
                     } else if let Some(command_name) = msg.text.strip_prefix("!cmd:info") {
                         let command_name = command_name.trim();
-                        if let Some(body) = data.lock().await.commands.get(command_name) {
+                        if let Some(body) = data.read().await.commands.get(command_name) {
                             let words = body.as_words();
                             bot.reply(
                                 &msg,
@@ -90,8 +98,7 @@ impl Store {
                         }
                     } else if let Some(command_name) = msg.text.strip_prefix("!cmd:remove") {
                         let command_name = command_name.trim();
-                        let mut data = data.lock().await;
-                        if let Some(to_remove) = data.commands.get(command_name) {
+                        if let Some(to_remove) = data.read().await.commands.get(command_name) {
                             if to_remove.is_const() {
                                 bot.reply(
                                     &msg,
@@ -100,7 +107,8 @@ impl Store {
                                 .await;
                                 return;
                             }
-                            data.commands.remove(command_name);
+                            data.write().await.commands.remove(command_name);
+                            tokio::spawn(io::refresh(data.clone()));
                         } else {
                             bot.reply(&msg, format!("Unknown command {:?}", command_name))
                                 .await;
@@ -116,7 +124,7 @@ impl Store {
                             &msg,
                             format!(
                                 "Commands: {}",
-                                data.lock()
+                                data.read()
                                     .await
                                     .commands
                                     .iter()
@@ -136,7 +144,7 @@ impl Store {
                     if let Some(command) = msg.text.strip_prefix('!') {
                         let words = command.trim().split(' ').collect::<Vec<_>>();
                         let [cmd, args @ ..] = words.as_slice() else { return; };
-                        if let Some(command) = data.lock().await.commands.get(*cmd) {
+                        if let Some(command) = data.read().await.commands.get(*cmd) {
                             if !command.can_run(&msg, &bot) {
                                 return;
                             }

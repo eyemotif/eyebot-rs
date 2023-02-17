@@ -23,7 +23,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             client_id: args.clientid.clone(),
             client_secret: args.clientsecret.clone(),
             redirect_url: String::from("http://localhost:3000"),
-            tokens_store_path: tokens_store_path.clone(),
+            tokens_store_path: tokens_store_path.join("access"),
         })
         .await
         {
@@ -45,7 +45,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 client_id: args.clientid.clone(),
                 client_secret: args.clientsecret.clone(),
                 redirect_url: String::from("http://localhost:3000"),
-                tokens_store_path,
+                tokens_store_path: tokens_store_path.join("access"),
             })
             .await?
         }
@@ -98,7 +98,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     //     }
     // }));
 
-    let stored_commands = eye::Store::new();
+    let stored_commands = eye::Store::new(tokens_store_path.clone()).await?;
     tokio::spawn(stored_commands.register_base_commands(&bot));
 
     tokio::spawn(
