@@ -19,10 +19,7 @@ struct StoreData {
 impl Store {
     pub async fn new<P: Into<PathBuf>>(store_path: P) -> std::io::Result<Self> {
         let store = Store(Arc::new(RwLock::new(StoreData {
-            commands: HashMap::from_iter(
-                ["cmd:set", "commands", "cmd:info"]
-                    .map(|k| (String::from(k), command::CommandRules::empty_const())),
-            ),
+            commands: HashMap::new(),
             store_path: store_path.into(),
         })));
         io::load(store.0.clone()).await?;

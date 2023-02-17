@@ -115,6 +115,7 @@ pub fn register_base_commands(
                         if !command.can_run(&msg, &bot) {
                             return;
                         }
+                        
                         command
                             .execute(
                                 args.into_iter().copied().map(String::from).collect(),
@@ -128,7 +129,17 @@ pub fn register_base_commands(
         })),
     ];
 
+    let data = store.0.clone();
     async move {
+        let mut data = data.write().await;
+        for builtin in ["cmd:set", "commands", "cmd:info", "cmd:remove"] {
+            data.commands.insert(
+                String::from(builtin),
+                super::command::CommandRules::empty_const(),
+            );
+        }
+        drop(data);
+
         let mut set = tokio::task::JoinSet::new();
         for command in commands {
             set.spawn(command);
