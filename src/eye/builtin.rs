@@ -97,21 +97,17 @@ pub fn register_base_commands(
             let data = data_com.clone();
             async move {
                 if msg.text.starts_with("!commands") {
-                    bot.reply(
-                        &msg,
-                        format!(
-                            "Commands: {}",
-                            data.read()
-                                .await
-                                .commands
-                                .iter()
-                                .filter_map(|(k, v)| v.can_run(&msg, &bot).then_some(k))
-                                .cloned()
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ),
-                    )
-                    .await;
+                    let mut commands = data
+                        .read()
+                        .await
+                        .commands
+                        .iter()
+                        .filter_map(|(k, v)| v.can_run(&msg, &bot).then_some(k))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    commands.sort_unstable();
+                    bot.reply(&msg, format!("Commands: {}", commands.join(", ")))
+                        .await;
                 }
             }
         })),
@@ -138,10 +134,16 @@ pub fn register_base_commands(
     let data = store.0.clone();
     async move {
         let mut data = data.write().await;
-        for builtin in ["cmd:set", "commands", "cmd:info", "cmd:remove", "shutdown"] {
+        for (builtin, is_super) in [
+            ("cmd:set", true),
+            ("commands", false),
+            ("cmd:info", true),
+            ("cmd:remove", true),
+            ("shutdown", true),
+        ] {
             data.commands.insert(
                 String::from(builtin),
-                super::command::CommandRules::empty_builtin(),
+                super::command::CommandRules::empty_builtin(is_super),
             );
         }
         drop(data);

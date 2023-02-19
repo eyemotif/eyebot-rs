@@ -89,10 +89,14 @@ impl CommandRules {
     }
 
     #[must_use]
-    pub fn empty_builtin() -> Self {
+    pub fn empty_builtin(is_super: bool) -> Self {
         Self {
             body: Vec::new(),
-            tags: HashSet::from_iter([CommandTag::Builtin]),
+            tags: HashSet::from_iter(if is_super {
+                vec![CommandTag::Builtin, CommandTag::Super]
+            } else {
+                vec![CommandTag::Builtin]
+            }),
         }
     }
 
