@@ -1,5 +1,6 @@
 use super::command::CommandRules;
 use super::io;
+use std::sync::Arc;
 
 pub fn register_base_commands(
     store: &super::Store,
@@ -23,7 +24,7 @@ pub fn register_base_commands(
                             if existing_command.is_builtin() {
                                 bot.reply(
                                     &msg,
-                                    format!("Cannot set a builtin cmd {command_name:?}"),
+                                    format!("Cannot set a builtin cmd {command_name:?}."),
                                 )
                                 .await;
                                 return;
@@ -34,8 +35,8 @@ pub fn register_base_commands(
                                 data.write()
                                     .await
                                     .commands
-                                    .insert(String::from(command_name), body);
-                                tokio::spawn(io::refresh(data.clone()));
+                                    .insert(String::from(command_name), Arc::new(body));
+                                io::spawn_io(data.clone(), io::refresh(data.clone()));
                             }
                             Err(err) => {
                                 bot.reply(&msg, format!("Could not create command: {err}"))
@@ -45,7 +46,7 @@ pub fn register_base_commands(
                     } else {
                         bot.reply(
                             &msg,
-                            String::from("Command \"cmd:set\" expects at least 2 arguments"),
+                            String::from("Command \"cmd:set\" expects at least 2 arguments."),
                         )
                         .await
                     }
@@ -62,7 +63,7 @@ pub fn register_base_commands(
                         )
                         .await;
                     } else {
-                        bot.reply(&msg, format!("Unknown command {command_name:?}"))
+                        bot.reply(&msg, format!("Unknown command {command_name:?}."))
                             .await;
                     }
                 } else if let Some(command_name) = msg.text.strip_prefix("!cmd:remove") {
@@ -74,7 +75,7 @@ pub fn register_base_commands(
                         if to_remove.is_builtin() {
                             bot.reply(
                                 &msg,
-                                format!("Cannot remove a builtin cmd {command_name:?}"),
+                                format!("Cannot remove a builtin cmd {command_name:?}."),
                             )
                             .await;
                             data_write.commands.insert(command_name, to_remove);
@@ -82,14 +83,51 @@ pub fn register_base_commands(
                         }
 
                         drop(data_write);
-                        tokio::spawn(io::refresh(data.clone()));
+                        io::spawn_io(data.clone(), io::refresh(data.clone()));
                     } else {
-                        bot.reply(&msg, format!("Unknown command {command_name:?}"))
+                        bot.reply(&msg, format!("Unknown command {command_name:?}."))
                             .await;
                     }
                 } else if msg.text.starts_with("!shutdown") {
                     bot.shutdown().await;
                     return;
+                } else if let Some(args) = msg.text.strip_prefix("!counter:set") {
+                    let args = args.trim();
+                    if let Some((counter_name, counter_value)) = args.split_once(' ') {
+                        if let Ok(value) = counter_value.parse() {
+                            data.write()
+                                .await
+                                .counters
+                                .insert(String::from(counter_name), value);
+                            io::spawn_io(data.clone(), io::refresh(data.clone()));
+                        } else {
+                            bot.reply(&msg, format!("{counter_value:?} is not an integer."))
+                                .await
+                        }
+                    } else {
+                        bot.reply(
+                            &msg,
+                            String::from("Command \"counter:set\" expects at least 2 arguments."),
+                        )
+                        .await
+                    }
+                } else if let Some(counter_name) = msg.text.strip_prefix("!counter:remove") {
+                    let counter_name = counter_name.trim();
+                    if data.write().await.counters.remove(counter_name).is_some() {
+                        io::spawn_io(data.clone(), io::refresh(data.clone()));
+                    } else {
+                        bot.reply(&msg, format!("Unknown counter {counter_name:?}."))
+                            .await;
+                    }
+                } else if let Some(counter_name) = msg.text.strip_prefix("!counter:get") {
+                    let counter_name = counter_name.trim();
+                    if let Some(value) = data.read().await.counters.get(counter_name) {
+                        bot.reply(&msg, format!("Counter {counter_name:?}: {value}"))
+                            .await;
+                    } else {
+                        bot.reply(&msg, format!("Unknown counter {counter_name:?}."))
+                            .await
+                    }
                 }
             }
         })),
@@ -117,13 +155,20 @@ pub fn register_base_commands(
                 if let Some(command) = msg.text.strip_prefix('!') {
                     let words = command.trim().split(' ').collect::<Vec<_>>();
                     let [cmd, args @ ..] = words.as_slice() else { return; };
-                    if let Some(command) = data.read().await.commands.get(*cmd) {
+                    let data_read = data.read().await;
+                    if let Some(command) = data_read.commands.get(*cmd).cloned() {
                         if !command.can_run(&msg, &bot) || command.is_builtin() {
                             return;
                         }
 
+                        drop(data_read);
                         command
-                            .execute(args.iter().copied().map(String::from).collect(), &msg, &bot)
+                            .execute(
+                                args.iter().copied().map(String::from).collect(),
+                                &msg,
+                                &bot,
+                                data.clone(),
+                            )
                             .await;
                     }
                 }
@@ -143,7 +188,7 @@ pub fn register_base_commands(
         ] {
             data.commands.insert(
                 String::from(builtin),
-                super::command::CommandRules::empty_builtin(is_super),
+                Arc::new(super::command::CommandRules::empty_builtin(is_super)),
             );
         }
         drop(data);
@@ -152,6 +197,8 @@ pub fn register_base_commands(
         for command in commands {
             set.spawn(command);
         }
-        while let Some(Ok(())) = set.join_next().await {}
+        while let Some(join_result) = set.join_next().await {
+            join_result.expect("Command task panicked");
+        }
     }
 }

@@ -1,25 +1,62 @@
+use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::io::AsyncReadExt;
+use tokio::io::AsyncBufReadExt;
 use tokio::sync::RwLock;
 
-pub(super) async fn refresh(data: Arc<RwLock<super::StoreData>>) -> std::io::Result<()> {
+pub(super) fn spawn_io(
+    data: super::StoreInner,
+    fut: impl Future<Output = std::io::Result<()>> + Send + 'static,
+) {
+    tokio::spawn(async move {
+        match fut.await {
+            Ok(()) => (),
+            Err(err) => {
+                let _ = data
+                    .read()
+                    .await
+                    .error_reporter
+                    .send(crate::bot::error::BotError::IO(err))
+                    .await;
+            }
+        }
+    });
+}
+
+pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
     let data = data.read().await;
 
-    let commands_file = (
-        data.store_path.join("commands.txt"),
-        data.commands
-            .iter()
-            .filter_map(|(k, v)| {
-                (!v.is_builtin() && !v.is_temporary())
-                    .then_some(format!("{k} {}", v.as_words_string()))
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-    );
+    let stores = [
+        (
+            data.store_path.join("commands.txt"),
+            data.commands
+                .iter()
+                .filter_map(|(k, v)| {
+                    (!v.is_builtin() && !v.is_temporary())
+                        .then_some(format!("{k} {}", v.as_words_string()))
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+        (
+            data.store_path.join("counters.txt"),
+            data.counters
+                .iter()
+                .map(|(k, v)| format!("{k} {v}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+    ];
 
     drop(data);
-    tokio::try_join!(tokio::fs::write(commands_file.0, commands_file.1),)?;
+
+    let mut set = tokio::task::JoinSet::new();
+    for (path, store) in stores {
+        set.spawn(tokio::fs::write(path, store));
+    }
+    while let Some(join_result) = set.join_next().await {
+        join_result.expect("io::refresh panicked")?;
+    }
 
     Ok(())
 }
@@ -27,13 +64,8 @@ pub(super) async fn refresh(data: Arc<RwLock<super::StoreData>>) -> std::io::Res
 pub(super) async fn load(data: Arc<RwLock<super::StoreData>>) -> std::io::Result<()> {
     let mut data = data.write().await;
 
-    for command in read_create(data.store_path.join("commands.txt"))
-        .await?
-        .split('\n')
-    {
-        if command.trim().is_empty() {
-            continue;
-        }
+    for command in read_create(data.store_path.join("commands.txt")).await? {
+        let command = command.trim();
 
         if let Some((name, command)) = command.split_once(' ') {
             if data.commands.get(name).is_some() {
@@ -41,22 +73,38 @@ pub(super) async fn load(data: Arc<RwLock<super::StoreData>>) -> std::io::Result
             }
 
             if let Ok(command) = super::command::CommandRules::parse(command) {
-                data.commands.insert(String::from(name), command);
+                data.commands.insert(String::from(name), Arc::new(command));
             }
         }
     }
+
+    for counter in read_create(data.store_path.join("counters.txt")).await? {
+        let counter = counter.trim();
+
+        if let Some((name, count)) = counter.split_once(' ') {
+            if let Ok(count) = count.parse() {
+                data.counters.insert(String::from(name), count);
+            }
+        }
+    }
+
     Ok(())
 }
 
-async fn read_create<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
-    let mut file = tokio::fs::OpenOptions::new()
+async fn read_create<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<String>> {
+    let file = tokio::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .open(path)
         .await?;
+    let file = tokio::io::BufReader::new(file);
+    let mut file = file.lines();
 
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).await?;
+    let mut buf = Vec::new();
+    while let Some(line) = file.next_line().await? {
+        buf.push(line);
+    }
+
     Ok(buf)
 }

@@ -1,3 +1,4 @@
+use super::io;
 use crate::bot::interface::BotInterface;
 use crate::chat::data::ChatMessage;
 use std::collections::HashSet;
@@ -12,6 +13,7 @@ pub enum CommandSection {
     Echo(String),
     ChatterName,
     WordIndex(usize),
+    Counter(String),
 }
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum CommandTag {
@@ -19,6 +21,9 @@ pub enum CommandTag {
     Builtin,
     Super,
     Temporary,
+    CountInc(String),
+    CountDec(String),
+    CountReset(String),
 }
 #[derive(Debug)]
 pub enum RulesError {
@@ -100,7 +105,13 @@ impl CommandRules {
         }
     }
 
-    pub async fn execute(&self, args: Vec<String>, msg: &ChatMessage, bot: &BotInterface) {
+    pub(super) async fn execute(
+        &self,
+        args: Vec<String>,
+        msg: &ChatMessage,
+        bot: &BotInterface,
+        data: super::StoreInner,
+    ) {
         let mut chatter_name: Option<String> = None;
         let mut message = Vec::new();
 
@@ -122,18 +133,64 @@ impl CommandRules {
                 CommandSection::WordIndex(index) => {
                     String::from(args.get(*index).unwrap_or(&index.to_string()))
                 },
+                CommandSection::Counter(name) => if let Some(counter_value) = data.read().await.counters.get(name) {
+                    counter_value.to_string()
+                } else {
+                    bot.reply(&msg, format!("Error: Counter {name:?} not found.")).await;
+                    return;
+                },
             })
         }
 
         let message = message.join("");
+        let mut did_print = false;
         for tag in &self.tags {
+            // purposefully omitted a _ case to get get errors on adding a new CommandTag
             match tag {
-                CommandTag::Reply => bot.reply(msg, message).await,
-                _ => continue,
+                CommandTag::Reply if !did_print => {
+                    bot.reply(msg, &message).await;
+                    did_print = true;
+                }
+                CommandTag::Reply => (),
+                CommandTag::Builtin => (),
+                CommandTag::Super => (),
+                CommandTag::Temporary => (),
+                CommandTag::CountInc(name) => {
+                    if let Some(counter_value) = data.write().await.counters.get_mut(name) {
+                        *counter_value += 1;
+                        io::spawn_io(data.clone(), io::refresh(data.clone()));
+                    } else {
+                        bot.reply(&msg, format!("Error: Counter {name:?} not found."))
+                            .await;
+                        return;
+                    }
+                }
+                CommandTag::CountDec(name) => {
+                    if let Some(counter_value) = data.write().await.counters.get_mut(name) {
+                        *counter_value -= 1;
+                        io::spawn_io(data.clone(), io::refresh(data.clone()));
+                    } else {
+                        bot.reply(&msg, format!("Error: Counter {name:?} not found."))
+                            .await;
+                        return;
+                    }
+                }
+                CommandTag::CountReset(name) => {
+                    if let Some(counter_value) = data.write().await.counters.get_mut(name) {
+                        *counter_value = 0;
+                        io::spawn_io(data.clone(), io::refresh(data.clone()));
+                    } else {
+                        bot.reply(&msg, format!("Error: Counter {name:?} not found."))
+                            .await;
+                        return;
+                    }
+                }
             }
-            return;
         }
-        bot.say(message).await;
+
+        if !did_print {
+            bot.say(message).await;
+        }
     }
 
     #[must_use]
@@ -153,12 +210,16 @@ impl CommandRules {
                 CommandTag::Builtin => None,
                 CommandTag::Super => Some(String::from("&SUPER")),
                 CommandTag::Temporary => Some(String::from("&TEMP")),
+                CommandTag::CountInc(name) => Some(format!("&C:INC={name}")),
+                CommandTag::CountDec(name) => Some(format!("&C:DEC={name}")),
+                CommandTag::CountReset(name) => Some(format!("&C:ZERO={name}")),
             })
             .map(|tag| tag + " ")
             .chain(self.body.iter().map(|sec| match sec {
                 CommandSection::Echo(txt) => String::from(txt),
                 CommandSection::ChatterName => String::from("%name"),
                 CommandSection::WordIndex(idx) => format!("%{idx}"),
+                CommandSection::Counter(name) => format!("%counter={name}"),
             }))
             .collect()
     }
@@ -178,6 +239,8 @@ impl CommandRules {
             input => {
                 if let Ok(idx) = input.parse() {
                     CommandSection::WordIndex(idx)
+                } else if let Some(counter_name) = input.strip_prefix("counter=") {
+                    CommandSection::Counter(String::from(counter_name))
                 } else {
                     return Err(RulesError::BadVariable(String::from(input)));
                 }
@@ -189,7 +252,19 @@ impl CommandRules {
             "REPLY" => CommandTag::Reply,
             "SUPER" => CommandTag::Super,
             "TEMP" => CommandTag::Temporary,
-            input => return Err(RulesError::BadTag(String::from(input))),
+            input => {
+                if let Some((tag, val)) = input.split_once('=') {
+                    let val = String::from(val);
+                    match tag {
+                        "C:INC" => CommandTag::CountInc(val),
+                        "C:DEC" => CommandTag::CountDec(val),
+                        "C:ZERO" => CommandTag::CountReset(val),
+                        input => return Err(RulesError::BadTag(String::from(input))),
+                    }
+                } else {
+                    return Err(RulesError::BadTag(String::from(input)));
+                }
+            }
         })
     }
 }

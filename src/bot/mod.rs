@@ -1,9 +1,8 @@
-use std::future::Future;
-
 use crate::chat;
 use crate::eventsub;
 use crate::twitch;
 use error::BotError;
+use std::future::Future;
 use tokio::sync::mpsc;
 
 pub mod data;
@@ -83,6 +82,15 @@ impl Bot {
                 }
             }
         }
+    }
+
+    #[must_use]
+    pub fn interface(&self) -> interface::BotInterface {
+        interface::BotInterface(self.interface.0.clone())
+    }
+    #[must_use]
+    pub fn error_reporter(&self) -> mpsc::Sender<error::BotError> {
+        self.interface.0.error_reporter.clone()
     }
 
     pub async fn run(mut self) -> Result<(), BotError> {

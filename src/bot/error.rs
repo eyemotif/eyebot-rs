@@ -3,6 +3,7 @@ pub enum BotError {
     Chat(crate::chat::error::ChatClientError),
     Eventsub(crate::eventsub::error::EventsubError),
     Say(irc::error::Error),
+    IO(std::io::Error),
     Close,
     Custom(String),
 }
@@ -17,6 +18,7 @@ impl std::fmt::Display for BotError {
             )),
             BotError::Close => f.write_str("Bot is closing"),
             BotError::Custom(err) => f.write_fmt(format_args!("User-defined Bot error: {err}")),
+            BotError::IO(err) => f.write_fmt(format_args!("IO Error: {err}")),
         }
     }
 }
