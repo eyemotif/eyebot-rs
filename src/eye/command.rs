@@ -112,46 +112,16 @@ impl CommandRules {
         bot: &BotInterface,
         data: super::StoreInner,
     ) {
-        let mut chatter_name: Option<String> = None;
-        let mut message = Vec::new();
-
-        for section in &self.body {
-            message.push(match section {
-                CommandSection::Echo(text) => String::from(text),
-                CommandSection::ChatterName => {
-                    if let Some(chatter_name) = &chatter_name {
-                        chatter_name.clone()
-                    } else {
-                        let Ok(Some(user)) = crate::twitch::user_from_id(&msg.user_id, bot.helix_auth()).await else {
-                            bot.error(format!("Could not get username from id {:?}", msg.user_id)).await;
-                            return;
-                        };
-                        chatter_name = Some(user.display_name.clone());
-                        user.display_name
-                    }
-                }
-                CommandSection::WordIndex(index) => {
-                    String::from(args.get(*index).unwrap_or(&index.to_string()))
-                },
-                CommandSection::Counter(name) => if let Some(counter_value) = data.read().await.counters.get(name) {
-                    counter_value.to_string()
-                } else {
-                    bot.reply(&msg, format!("Error: Counter {name:?} not found.")).await;
-                    return;
-                },
-            })
+        enum OutputType {
+            Normal,
+            Reply,
         }
+        let mut output_type = OutputType::Normal;
 
-        let message = message.join("");
-        let mut did_print = false;
         for tag in &self.tags {
             // purposefully omitted a _ case to get get errors on adding a new CommandTag
             match tag {
-                CommandTag::Reply if !did_print => {
-                    bot.reply(msg, &message).await;
-                    did_print = true;
-                }
-                CommandTag::Reply => (),
+                CommandTag::Reply => output_type = OutputType::Reply,
                 CommandTag::Builtin => (),
                 CommandTag::Super => (),
                 CommandTag::Temporary => (),
@@ -188,8 +158,41 @@ impl CommandRules {
             }
         }
 
-        if !did_print {
-            bot.say(message).await;
+        let mut chatter_name_cache: Option<String> = None;
+        let mut message = Vec::new();
+
+        for section in &self.body {
+            message.push(match section {
+                CommandSection::Echo(text) => String::from(text),
+                CommandSection::ChatterName => {
+                    if let Some(chatter_name) = &chatter_name_cache {
+                        chatter_name.clone()
+                    } else {
+                        let Ok(Some(user)) = crate::twitch::user_from_id(&msg.user_id, bot.helix_auth()).await else {
+                            bot.error(format!("Could not get username from id {:?}", msg.user_id)).await;
+                            return;
+                        };
+                        chatter_name_cache = Some(user.display_name.clone());
+                        user.display_name
+                    }
+                }
+                CommandSection::WordIndex(index) => {
+                    String::from(args.get(*index).unwrap_or(&index.to_string()))
+                },
+                CommandSection::Counter(name) => if let Some(counter_value) = data.read().await.counters.get(name) {
+                    counter_value.to_string()
+                } else {
+                    bot.reply(&msg, format!("Error: Counter {name:?} not found.")).await;
+                    return;
+                },
+            })
+        }
+
+        let message = message.join("");
+
+        match output_type {
+            OutputType::Normal => bot.say(message).await,
+            OutputType::Reply => bot.reply(&msg, message).await,
         }
     }
 
