@@ -128,6 +128,24 @@ pub fn register_base_commands(
                         bot.reply(&msg, format!("Unknown counter {counter_name:?}."))
                             .await
                     }
+                } else if msg.text.starts_with("!counter:list") {
+                    let keys = data
+                        .read()
+                        .await
+                        .counters
+                        .keys()
+                        .cloned()
+                        .collect::<Vec<_>>();
+
+                    bot.reply(
+                        &msg,
+                        if keys.is_empty() {
+                            String::from("No counters.")
+                        } else {
+                            format!("Counters: {}", keys.join(", "))
+                        },
+                    )
+                    .await;
                 }
             }
         })),
@@ -185,6 +203,10 @@ pub fn register_base_commands(
             ("cmd:info", true),
             ("cmd:remove", true),
             ("shutdown", true),
+            ("counter:set", true),
+            ("counter:get", true),
+            ("counter:remove", true),
+            ("counter:list", true),
         ] {
             data.commands.insert(
                 String::from(builtin),
