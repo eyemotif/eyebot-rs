@@ -7,15 +7,39 @@ pub fn register_base_commands(
     bot: &crate::bot::Bot,
 ) -> impl std::future::Future<Output = ()> + 'static {
     let data_mod = store.0.clone();
-    let data_com = store.0.clone();
+    let data_cmd = store.0.clone();
     let data_cus = store.0.clone();
-    let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 3] = [
+    let data_cnt = store.0.clone();
+    let data_cmn = store.0.clone();
+
+    let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 5] = [
+        // Mod-only commands
         Box::pin(bot.on_chat_message(move |msg, bot| {
-            let data = data_mod.clone();
+            let _data = data_mod.clone();
             async move {
                 if !msg.user_is_super() {
                     return;
                 }
+
+                if msg.text.starts_with("!shutdown") {
+                    bot.shutdown().await;
+                    return;
+                } else if msg.text.starts_with("!ping") {
+                    bot.reply(&msg, "Pong!").await;
+                }
+            }
+        })),
+        // Custom command commands
+        Box::pin(bot.on_chat_message(move |msg, bot| {
+            let data = data_cmd.clone();
+            async move {
+                if !data.read().await.options.features.custom_commands {
+                    return;
+                }
+                if !msg.user_is_super() {
+                    return;
+                }
+
                 if let Some(command) = msg.text.strip_prefix("!cmd:set") {
                     if let Some((command_name, command_body)) = command.trim().split_once(' ') {
                         if let Some(existing_command) =
@@ -88,10 +112,21 @@ pub fn register_base_commands(
                         bot.reply(&msg, format!("Unknown command {command_name:?}."))
                             .await;
                     }
-                } else if msg.text.starts_with("!shutdown") {
-                    bot.shutdown().await;
+                }
+            }
+        })),
+        // Counter commands
+        Box::pin(bot.on_chat_message(move |msg, bot| {
+            let data = data_cnt.clone();
+            async move {
+                if !data.read().await.options.features.counters {
                     return;
-                } else if let Some(args) = msg.text.strip_prefix("!counter:set") {
+                }
+                if !msg.user_is_super() {
+                    return;
+                }
+
+                if let Some(args) = msg.text.strip_prefix("!counter:set") {
                     let args = args.trim();
                     if let Some((counter_name, counter_value)) = args.split_once(' ') {
                         if let Ok(value) = counter_value.parse() {
@@ -149,27 +184,14 @@ pub fn register_base_commands(
                 }
             }
         })),
-        Box::pin(bot.on_chat_message(move |msg, bot| {
-            let data = data_com.clone();
-            async move {
-                if msg.text.starts_with("!commands") {
-                    let mut commands = data
-                        .read()
-                        .await
-                        .commands
-                        .iter()
-                        .filter_map(|(k, v)| v.can_run(&msg, &bot).then_some(k))
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    commands.sort_unstable();
-                    bot.reply(&msg, format!("Commands: {}", commands.join(", ")))
-                        .await;
-                }
-            }
-        })),
+        // Custom command executor
         Box::pin(bot.on_chat_message(move |msg, bot| {
             let data = data_cus.clone();
             async move {
+                if !data.read().await.options.features.custom_commands {
+                    return;
+                }
+
                 if let Some(command) = msg.text.strip_prefix('!') {
                     let words = command.trim().split(' ').collect::<Vec<_>>();
                     let [cmd, args @ ..] = words.as_slice() else { return; };
@@ -193,22 +215,49 @@ pub fn register_base_commands(
                 }
             }
         })),
+        // Common commands
+        Box::pin(bot.on_chat_message(move |msg, bot| {
+            let data = data_cmn.clone();
+            async move {
+                if msg.text.starts_with("!commands") {
+                    let mut commands = data
+                        .read()
+                        .await
+                        .commands
+                        .iter()
+                        .filter_map(|(k, v)| v.can_run(&msg, &bot).then_some(k))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    commands.sort_unstable();
+                    bot.reply(&msg, format!("Commands: {}", commands.join(", ")))
+                        .await;
+                }
+            }
+        })),
     ];
 
     let data = store.0.clone();
     async move {
         let mut data = data.write().await;
-        for (builtin, is_super) in [
-            ("cmd:set", true),
-            ("commands", false),
-            ("cmd:info", true),
-            ("cmd:remove", true),
-            ("shutdown", true),
-            ("counter:set", true),
-            ("counter:get", true),
-            ("counter:remove", true),
-            ("counter:list", true),
-        ] {
+        let mut builtins = vec![("shutdown", true), ("ping", true), ("commands", false)];
+
+        if data.options.features.custom_commands {
+            builtins.append(&mut vec![
+                ("cmd:set", true),
+                ("cmd:info", true),
+                ("cmd:remove", true),
+            ]);
+        }
+        if data.options.features.counters {
+            builtins.append(&mut vec![
+                ("counter:set", true),
+                ("counter:get", true),
+                ("counter:remove", true),
+                ("counter:list", true),
+            ]);
+        }
+
+        for (builtin, is_super) in builtins {
             data.commands.insert(
                 String::from(builtin),
                 Arc::new(super::command::CommandRules::empty_builtin(is_super)),

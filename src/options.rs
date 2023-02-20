@@ -2,12 +2,15 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct Options {
     pub features: Features,
     pub exec: Exec,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct Features {
     pub eye: bool,
     pub custom_commands: bool,
@@ -15,6 +18,8 @@ pub struct Features {
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct Exec {
     pub debug: bool,
 }
@@ -30,12 +35,22 @@ impl Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            features: Features {
-                eye: true,
-                custom_commands: true,
-                counters: true,
-            },
-            exec: Exec { debug: false },
+            features: Features::default(),
+            exec: Exec::default(),
         }
+    }
+}
+impl Default for Features {
+    fn default() -> Self {
+        Self {
+            eye: true,
+            custom_commands: true,
+            counters: true,
+        }
+    }
+}
+impl Default for Exec {
+    fn default() -> Self {
+        Self { debug: false }
     }
 }

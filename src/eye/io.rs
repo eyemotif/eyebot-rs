@@ -26,8 +26,10 @@ pub(super) fn spawn_io(
 pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
     let data = data.read().await;
 
-    let stores = [
-        (
+    let mut stores = Vec::new();
+
+    if data.options.features.custom_commands {
+        stores.push((
             data.store_path.join("commands.txt"),
             data.commands
                 .iter()
@@ -37,16 +39,18 @@ pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
                 })
                 .collect::<Vec<_>>()
                 .join("\n"),
-        ),
-        (
+        ))
+    }
+    if data.options.features.counters {
+        stores.push((
             data.store_path.join("counters.txt"),
             data.counters
                 .iter()
                 .map(|(k, v)| format!("{k} {v}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
-        ),
-    ];
+        ));
+    }
 
     drop(data);
 
@@ -64,26 +68,30 @@ pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
 pub(super) async fn load(data: Arc<RwLock<super::StoreData>>) -> std::io::Result<()> {
     let mut data = data.write().await;
 
-    for command in read_create(data.store_path.join("commands.txt")).await? {
-        let command = command.trim();
+    if data.options.features.custom_commands {
+        for command in read_create(data.store_path.join("commands.txt")).await? {
+            let command = command.trim();
 
-        if let Some((name, command)) = command.split_once(' ') {
-            if data.commands.get(name).is_some() {
-                continue;
-            }
+            if let Some((name, command)) = command.split_once(' ') {
+                if data.commands.get(name).is_some() {
+                    continue;
+                }
 
-            if let Ok(command) = super::command::CommandRules::parse(command) {
-                data.commands.insert(String::from(name), Arc::new(command));
+                if let Ok(command) = super::command::CommandRules::parse(command) {
+                    data.commands.insert(String::from(name), Arc::new(command));
+                }
             }
         }
     }
 
-    for counter in read_create(data.store_path.join("counters.txt")).await? {
-        let counter = counter.trim();
+    if data.options.features.counters {
+        for counter in read_create(data.store_path.join("counters.txt")).await? {
+            let counter = counter.trim();
 
-        if let Some((name, count)) = counter.split_once(' ') {
-            if let Ok(count) = count.parse() {
-                data.counters.insert(String::from(name), count);
+            if let Some((name, count)) = counter.split_once(' ') {
+                if let Ok(count) = count.parse() {
+                    data.counters.insert(String::from(name), count);
+                }
             }
         }
     }

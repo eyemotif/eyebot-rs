@@ -92,8 +92,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    let eye_store = eye::Store::new(tokens_store_path.clone(), &bot).await?;
-    tokio::spawn(eye_store.register_base_commands(&bot));
+    if options.features.eye {
+        let eye_store = eye::Store::new(tokens_store_path.clone(), &bot, options).await?;
+        tokio::spawn(eye_store.register_base_commands(&bot));
+    }
 
     tokio::spawn(
         bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
