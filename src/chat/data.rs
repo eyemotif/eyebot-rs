@@ -20,6 +20,7 @@ pub struct ChatMessage {
     pub is_moderator: bool,
     pub is_subscriber: bool,
     pub emotes: Vec<EmoteInfo>,
+    pub display_name: String,
 }
 
 impl ChatMessage {

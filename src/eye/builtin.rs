@@ -173,6 +173,7 @@ pub fn register_base_commands(
                 if let Some(command) = msg.text.strip_prefix('!') {
                     let words = command.trim().split(' ').collect::<Vec<_>>();
                     let [cmd, args @ ..] = words.as_slice() else { return; };
+
                     let data_read = data.read().await;
                     if let Some(command) = data_read.commands.get(*cmd).cloned() {
                         if !command.can_run(&msg, &bot) || command.is_builtin() {

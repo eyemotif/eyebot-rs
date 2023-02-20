@@ -17,11 +17,17 @@ pub struct EventsubClient {
     session_id: String,
     data: EventsubClientData,
     interface: watch::Sender<serde_json::Value>,
+    options: crate::options::Options,
 }
 
 impl EventsubClient {
     #[must_use]
-    pub async fn new(data: EventsubClientData) -> Result<Self, EventsubError> {
+    pub async fn new(
+        data: EventsubClientData,
+        options: crate::options::Options,
+    ) -> Result<Self, EventsubError> {
+        options.debug("Eventsub: connecting to Twitch");
+
         let websocket = EventsubClient::connect_websocket()
             .await
             .map_err(EventsubError::OnConnect)?;
@@ -31,6 +37,7 @@ impl EventsubClient {
             websocket,
             data,
             interface: watch::channel(serde_json::Value::Null).0,
+            options,
         })
     }
 
@@ -47,6 +54,8 @@ impl EventsubClient {
     }
 
     async fn reconnect(&mut self) -> Result<(), EventsubError> {
+        self.options.debug("Eventsub: Reconnecting to twitch");
+
         self.websocket
             .close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
                 code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
@@ -95,6 +104,8 @@ impl EventsubClient {
     }
 
     async fn handle_messages(mut self) -> Result<(), EventsubError> {
+        self.options.debug("Eventsub: Ready to receive messages!");
+
         while let Some(message) = self
             .websocket
             .next()
@@ -140,6 +151,8 @@ impl EventsubClient {
         Ok(())
     }
     async fn handle_welcome_message(&mut self) -> Result<(), EventsubError> {
+        self.options.debug("Eventsub: Receiving Welcome message");
+
         while let Some(message) = self
             .websocket
             .next()
@@ -153,6 +166,11 @@ impl EventsubClient {
                         return Err(EventsubError::WelcomeInvalid)
                     };
                     self.session_id = welcome.payload.session.id;
+
+                    self.options.debug(format!(
+                        "Eventsub: Subscribing to events (session id: {})",
+                        self.session_id
+                    ));
 
                     outbound::send_subscriptions(
                         &self.data.subscriptions,

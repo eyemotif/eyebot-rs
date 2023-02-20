@@ -71,7 +71,8 @@ pub struct SubscriptionEmote {
 }
 
 impl SubscriptionMessage {
-    #[must_use] pub fn get_emote_info(&self) -> Vec<crate::chat::data::EmoteInfo> {
+    #[must_use]
+    pub fn get_emote_info(&self) -> Vec<crate::chat::data::EmoteInfo> {
         let mut map = HashMap::<String, Vec<(u16, u16)>>::new();
         for emote in &self.emotes {
             if let Some(emote_locs) = map.get_mut(&emote.id) {

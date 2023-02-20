@@ -18,21 +18,29 @@ pub struct Bot {
 }
 
 impl Bot {
-    pub async fn new(data: data::BotData) -> Result<Self, BotError> {
-        let chat_client = chat::client::ChatClient::new(chat::data::ChatClientData {
-            access: data.access.clone(),
-            bot_username: data.bot_username,
-            chat_channel: data.chat_channel,
-        })
+    pub async fn new(
+        data: data::BotData,
+        options: crate::options::Options,
+    ) -> Result<Self, BotError> {
+        let chat_client = chat::client::ChatClient::new(
+            chat::data::ChatClientData {
+                access: data.access.clone(),
+                bot_username: data.bot_username,
+                chat_channel: data.chat_channel,
+            },
+            options,
+        )
         .await?;
 
-        let eventsub_client =
-            eventsub::client::EventsubClient::new(eventsub::data::EventsubClientData {
+        let eventsub_client = eventsub::client::EventsubClient::new(
+            eventsub::data::EventsubClientData {
                 client_id: data.client_id.clone(),
                 access: data.access.clone(),
                 subscriptions: data.subscriptions,
-            })
-            .await?;
+            },
+            options,
+        )
+        .await?;
 
         let helix_auth = twitch::HelixAuth {
             client_id: data.client_id,

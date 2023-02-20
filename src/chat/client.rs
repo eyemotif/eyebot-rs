@@ -16,10 +16,16 @@ pub struct ChatClient {
     data: super::data::ChatClientData,
     joined_users: HashSet<String>,
     interface: super::interface::ChatInterface,
+    options: crate::options::Options,
 }
 
 impl ChatClient {
-    pub async fn new(data: super::data::ChatClientData) -> Result<Self, ChatClientError> {
+    pub async fn new(
+        data: super::data::ChatClientData,
+        options: crate::options::Options,
+    ) -> Result<Self, ChatClientError> {
+        options.debug("Chat: connecting to Twitch");
+
         let mut client = Client::from_config(irc::client::prelude::Config {
             owners: vec![String::from("eyebot-rs")],
             nickname: Some(data.bot_username.clone()),
@@ -37,6 +43,7 @@ impl ChatClient {
             data,
             stream,
             client,
+            options,
         })
     }
 
@@ -64,14 +71,18 @@ impl ChatClient {
         Ok(())
     }
 
-    #[must_use] pub fn get_interface(&self) -> ChatInterface {
+    #[must_use]
+    pub fn get_interface(&self) -> ChatInterface {
         self.interface.clone()
     }
-    #[must_use] pub fn subscribe(&self) -> tokio::sync::watch::Receiver<ChatMessage> {
+    #[must_use]
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<ChatMessage> {
         self.interface.0.message_channel.subscribe()
     }
 
     async fn handle_chat_messages(mut self) -> Result<(), ChatClientError> {
+        self.options.debug("Chat: Ready to receive messages!");
+
         while let Some(message) = self.stream.next().await.transpose()? {
             match message.command {
                 Command::PING(part1, part2) => self.client.send(Command::PONG(part1, part2))?,
@@ -85,7 +96,7 @@ impl ChatClient {
                     .expect("Tags are always well formed");
 
                     // TODO: stop sending on error
-                    let _ = self.interface.0.message_channel.send(ChatMessage {
+                    let chat_message = ChatMessage {
                         id: tags.id,
                         channel: self.data.chat_channel.clone(),
                         text,
@@ -94,7 +105,15 @@ impl ChatClient {
                         is_moderator: tags.is_mod,
                         is_subscriber: tags.subscriber,
                         emotes: tags.emotes,
-                    });
+                        display_name: tags.display_name,
+                    };
+
+                    self.options.debug(format!(
+                        "Chat: {}> {:?}",
+                        chat_message.display_name, chat_message.text
+                    ));
+
+                    let _ = self.interface.0.message_channel.send(chat_message);
                 }
                 Command::JOIN(_, _, _) => {
                     let username = message
@@ -170,6 +189,8 @@ impl ChatClient {
             globaluserstate: bool,
         }
 
+        self.options.debug("Chat: Authenticating with Twitch irc");
+
         self.client.send(Command::CAP(
             None,
             irc::proto::CapSubCommand::REQ,
@@ -241,6 +262,8 @@ impl ChatClient {
             userstate: bool,
             roomstate: bool,
         }
+
+        self.options.debug("Chat: Joining Twitch IRC");
 
         self.client.send(Command::JOIN(
             format!("#{}", self.data.chat_channel),

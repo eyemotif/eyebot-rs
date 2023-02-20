@@ -17,6 +17,7 @@ pub struct AccessTokenManager {
     client_id: Arc<String>,
     client_secret: Arc<String>,
     token_store: PathBuf,
+    options: crate::options::Options,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,7 +44,12 @@ impl AccessTokenManager {
     /// and Refresh tokens.
     /// * `::IO` if the Access and Refresh tokens were not written to Disk.
     /// * `::BadData` if a response from Twitch could not be parsed.
-    pub async fn new_oauth(data: AccessTokenManagerOAuth) -> Result<Self, AccessTokenManagerError> {
+    pub async fn new_oauth(
+        data: AccessTokenManagerOAuth,
+        options: crate::options::Options,
+    ) -> Result<Self, AccessTokenManagerError> {
+        options.debug("Access: Requesting new tokens");
+
         let client = reqwest::Client::new();
         let response = client
             .post(
@@ -65,18 +71,20 @@ impl AccessTokenManager {
             AccessTokenManagerError::OnRequest,
         )?;
 
+        options.debug("Access: Got tokens!");
+
         let creds = Arc::new(RwLock::new(Credentials {
             oauth: Some(data.oauth),
             access_token: response.access_token,
             refresh_token: response.refresh_token,
         }));
         // TODO: deal with expires_in field
-        // AccessTokenManager::spawn_daemon(creds.clone());
         let manager = AccessTokenManager {
             creds,
             client_id: Arc::new(data.client_id),
             client_secret: Arc::new(data.client_secret),
             token_store: data.tokens_store_path,
+            options,
         };
         manager.write_tokens()?;
         Ok(manager)
@@ -100,6 +108,7 @@ impl AccessTokenManager {
     /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn new_tokens(
         data: AccessTokenManagerTokens,
+        options: crate::options::Options,
     ) -> Result<Self, AccessTokenManagerError> {
         let tokens = if data.tokens_store_path.try_exists()? {
             std::fs::read_to_string(&data.tokens_store_path)?
@@ -125,6 +134,7 @@ impl AccessTokenManager {
             client_id: Arc::new(data.client_id),
             client_secret: Arc::new(data.client_secret),
             token_store: data.tokens_store_path,
+            options,
         };
 
         if !manager.validate().await? {
@@ -145,6 +155,8 @@ impl AccessTokenManager {
     ///   validation request.
     /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn validate(&self) -> Result<bool, AccessTokenManagerError> {
+        self.options.debug("Access: Validating tokens");
+
         let response = reqwest::Client::new()
             .get("https://id.twitch.tv/oauth2/validate")
             .header(
@@ -187,6 +199,8 @@ impl AccessTokenManager {
     ///   Refresh tokens.
     /// * `::BadData` if a response from Twitch could not be parsed.
     pub async fn refresh(&self) -> Result<(), AccessTokenManagerError> {
+        self.options.debug("Access: Refreshing tokens");
+
         let response = reqwest::Client::new()
             .post(
                 String::from("https://id.twitch.tv/oauth2/token?grant_type=refresh_token")
@@ -251,6 +265,8 @@ impl AccessTokenManager {
     }
 
     fn write_tokens(&self) -> Result<(), AccessTokenManagerError> {
+        self.options.debug("Access: Writing tokens");
+
         let creds = self.creds.read().unwrap();
         std::fs::write(
             &self.token_store,

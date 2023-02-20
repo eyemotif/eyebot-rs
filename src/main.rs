@@ -11,42 +11,57 @@ pub mod chat;
 mod cli;
 pub mod eventsub;
 pub mod eye;
+pub mod options;
 pub mod twitch;
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = cli::Cli::parse();
     let tokens_store_path = expand_store_path(args.store);
+    let options = if let Some(options_file) = args.options_file {
+        let path = PathBuf::from(&options_file);
+        if !path.try_exists()? {
+            return Err(format!("Options file {options_file:?} does not exist.").into());
+        }
+        toml::from_str::<options::Options>(&std::fs::read_to_string(path)?)?
+    } else {
+        options::Options::default()
+    };
 
-    let token_manager =
-        match auth::access::AccessTokenManager::new_tokens(auth::AccessTokenManagerTokens {
+    let token_manager = match auth::access::AccessTokenManager::new_tokens(
+        auth::AccessTokenManagerTokens {
             client_id: args.clientid.clone(),
             client_secret: args.clientsecret.clone(),
             redirect_url: String::from("http://localhost:3000"),
             tokens_store_path: tokens_store_path.join("access"),
-        })
-        .await
-        {
-            Ok(_) if args.reauth => None,
-            Ok(manager) => Some(manager),
-            Err(auth::error::AccessTokenManagerError::InvalidTokens) => {
-                println!("The stored tokens are invalid/missing!");
-                None
-            }
-            Err(err) => return Err(err.into()),
-        };
+        },
+        options,
+    )
+    .await
+    {
+        Ok(_) if args.reauth => None,
+        Ok(manager) => Some(manager),
+        Err(auth::error::AccessTokenManagerError::InvalidTokens) => {
+            println!("The stored tokens are invalid/missing!");
+            None
+        }
+        Err(err) => return Err(err.into()),
+    };
 
     let token_manager = match token_manager {
         Some(manager) => manager,
         None => {
             let oauth = run_oauth_server(args.oauth.clone(), args.clientid.clone()).await?;
-            auth::access::AccessTokenManager::new_oauth(auth::AccessTokenManagerOAuth {
-                oauth,
-                client_id: args.clientid.clone(),
-                client_secret: args.clientsecret.clone(),
-                redirect_url: String::from("http://localhost:3000"),
-                tokens_store_path: tokens_store_path.join("access"),
-            })
+            auth::access::AccessTokenManager::new_oauth(
+                auth::AccessTokenManagerOAuth {
+                    oauth,
+                    client_id: args.clientid.clone(),
+                    client_secret: args.clientsecret.clone(),
+                    redirect_url: String::from("http://localhost:3000"),
+                    tokens_store_path: tokens_store_path.join("access"),
+                },
+                options,
+            )
             .await?
         }
     };
@@ -62,16 +77,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     .expect("Channel exists")
     .id;
 
-    let bot = bot::Bot::new(bot::data::BotData {
-        client_id: args.clientid,
-        access: token_manager,
-        bot_username: String::from("eye___bot"),
-        chat_channel: String::from("eye_motif"),
-        subscriptions: vec![Subscription::ChannelPointRedeem {
-            broadcaster_user_id: broadcaster_user_id.clone(),
-            reward_id: None,
-        }],
-    })
+    let bot = bot::Bot::new(
+        bot::data::BotData {
+            client_id: args.clientid,
+            access: token_manager,
+            bot_username: String::from("eye___bot"),
+            chat_channel: String::from("eye_motif"),
+            subscriptions: vec![Subscription::ChannelPointRedeem {
+                broadcaster_user_id: broadcaster_user_id.clone(),
+                reward_id: None,
+            }],
+        },
+        options,
+    )
     .await?;
 
     let eye_store = eye::Store::new(tokens_store_path.clone(), &bot).await?;

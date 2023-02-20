@@ -20,6 +20,7 @@ webpki-roots = "0.22.6"
 tokio-stream = "0.1.11"
 home = "0.5.4"
 tokio-tungstenite = { version = "0.18.0", features = ["rustls-tls-webpki-roots"] }
+toml = "0.7.2"
 
 # [profile.release]
 # panic = "abort"
