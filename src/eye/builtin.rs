@@ -1,5 +1,7 @@
 use super::command::CommandRules;
 use super::io;
+use super::listener;
+use regex::Regex;
 use std::sync::Arc;
 
 pub fn register_base_commands(
@@ -11,8 +13,10 @@ pub fn register_base_commands(
     let data_cus = store.0.clone();
     let data_cnt = store.0.clone();
     let data_cmn = store.0.clone();
+    let data_lis = store.0.clone();
+    let data_lse = store.0.clone();
 
-    let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 5] = [
+    let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 7] = [
         // Mod-only commands
         Box::pin(bot.on_chat_message(move |msg, bot| {
             let _data = data_mod.clone();
@@ -184,6 +188,148 @@ pub fn register_base_commands(
                 }
             }
         })),
+        // Listener commands
+        Box::pin(bot.on_chat_message(move |msg, bot| {
+            let data = data_lis.clone();
+            async move {
+                if !data.read().await.options.features.listeners {
+                    return;
+                }
+                if !msg.user_is_super() {
+                    return;
+                }
+
+                if let Some(args) = msg.text.strip_prefix("!listen:exact") {
+                    if let Some((name, pattern, command)) = listener::Listener::parts(args.trim()) {
+                        match CommandRules::parse(&command) {
+                            Ok(body) => {
+                                data.write().await.listeners.insert(
+                                    name,
+                                    listener::Listener {
+                                        predicate: listener::Predicate::Exactly(pattern),
+                                        body,
+                                    },
+                                );
+                                io::spawn_io(data.clone(), io::refresh(data.clone()));
+                            }
+                            Err(err) => {
+                                bot.reply(&msg, format!("Could not create listener: {err}."))
+                                    .await;
+                            }
+                        }
+                    } else {
+                        bot.reply(
+                            &msg,
+                            "Usage: !listen:exact listenname listenpatern/listencommand",
+                        )
+                        .await;
+                    }
+                } else if let Some(args) = msg.text.strip_prefix("!listen:has") {
+                    if let Some((name, pattern, command)) = listener::Listener::parts(args.trim()) {
+                        match CommandRules::parse(&command) {
+                            Ok(body) => {
+                                data.write().await.listeners.insert(
+                                    name,
+                                    listener::Listener {
+                                        predicate: listener::Predicate::Contains(pattern),
+                                        body,
+                                    },
+                                );
+                                io::spawn_io(data.clone(), io::refresh(data.clone()));
+                            }
+                            Err(err) => {
+                                bot.reply(&msg, format!("Could not create listener: {err}."))
+                                    .await;
+                            }
+                        }
+                    } else {
+                        bot.reply(
+                            &msg,
+                            "Usage: !listen:has listenname listenpatern/listencommand",
+                        )
+                        .await;
+                    }
+                } else if let Some(args) = msg.text.strip_prefix("!listen:regex") {
+                    if let Some((name, pattern, command)) = listener::Listener::parts(args.trim()) {
+                        let regex = match Regex::new(&pattern) {
+                            Ok(it) => it,
+                            Err(_err) => {
+                                // FIXME: Report regex errors
+                                bot.reply(&msg, "Regex error.").await;
+                                return;
+                            }
+                        };
+                        match CommandRules::parse(&command) {
+                            Ok(body) => {
+                                data.write().await.listeners.insert(
+                                    name,
+                                    listener::Listener {
+                                        predicate: listener::Predicate::Regex(regex),
+                                        body,
+                                    },
+                                );
+                                io::spawn_io(data.clone(), io::refresh(data.clone()));
+                            }
+                            Err(err) => {
+                                bot.reply(&msg, format!("Could not create listener: {err}."))
+                                    .await;
+                            }
+                        }
+                    } else {
+                        bot.reply(
+                            &msg,
+                            "Usage: !listen:regex listenname listenpatern/listencommand",
+                        )
+                        .await;
+                    }
+                } else if let Some(name) = msg.text.strip_prefix("!listen:info") {
+                    let name = name.trim();
+                    if let Some(listener) = data.read().await.listeners.get(name) {
+                        bot.reply(
+                            &msg,
+                            format!(
+                                "Listener {name} {}/{}",
+                                match &listener.predicate {
+                                    listener::Predicate::Exactly(pat) => format!("(exact): {pat}"),
+                                    listener::Predicate::Contains(pat) =>
+                                        format!("(contains): {pat}"),
+                                    listener::Predicate::Regex(pat) => format!("(regex): {pat}"),
+                                },
+                                listener.body.as_words_string(),
+                            ),
+                        )
+                        .await;
+                    } else {
+                        bot.reply(&msg, format!("Unknown listener {name}.")).await;
+                    }
+                } else if let Some(name) = msg.text.strip_prefix("!listen:remove") {
+                    let name = name.trim();
+                    if let Some(_) = data.write().await.listeners.remove(name) {
+                        io::spawn_io(data.clone(), io::refresh(data.clone()));
+                    } else {
+                        bot.reply(&msg, format!("Unknown listener {name}.")).await;
+                    }
+                } else if msg.text.starts_with("!listen:list") {
+                    let keys = data
+                        .read()
+                        .await
+                        .listeners
+                        .keys()
+                        .cloned()
+                        .collect::<Vec<_>>();
+
+                    bot.reply(
+                        &msg,
+                        if keys.is_empty() {
+                            String::from("No listeners.")
+                        } else {
+                            format!("Listeners: {}", keys.join(", "))
+                        },
+                    )
+                    .await;
+                }
+            }
+        })),
         // Custom command executor
         Box::pin(bot.on_chat_message(move |msg, bot| {
             let data = data_cus.clone();
@@ -212,6 +358,19 @@ pub fn register_base_commands(
                             )
                             .await;
                     }
+                }
+            }
+        })),
+        // Listener executor
+        Box::pin(bot.on_chat_message(move |msg, bot| {
+            let data = data_lse.clone();
+            async move {
+                if !data.read().await.options.features.listeners {
+                    return;
+                }
+
+                for (_, listener) in &data.read().await.listeners {
+                    listener.execute(&msg, &bot, data.clone()).await;
                 }
             }
         })),
@@ -254,6 +413,17 @@ pub fn register_base_commands(
                 ("counter:get", true),
                 ("counter:remove", true),
                 ("counter:list", true),
+            ]);
+        }
+
+        if data.options.features.listeners {
+            builtins.append(&mut vec![
+                ("listen:exact", true),
+                ("listen:has", true),
+                ("listen:regex", true),
+                ("listen:list", true),
+                ("listen:info", true),
+                ("listen:remove", true),
             ]);
         }
 

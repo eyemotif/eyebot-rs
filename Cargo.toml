@@ -21,6 +21,8 @@ tokio-stream = "0.1.11"
 home = "0.5.4"
 tokio-tungstenite = { version = "0.18.0", features = ["rustls-tls-webpki-roots"] }
 toml = "0.7.2"
+regex = "1.7.1"
+lazy_static = "1.4.0"
 
-# [profile.release]
-# panic = "abort"
+[profile.release]
+panic = "abort"

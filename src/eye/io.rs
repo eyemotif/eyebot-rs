@@ -29,6 +29,8 @@ pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
     let mut stores = Vec::new();
 
     if data.options.features.custom_commands {
+        data.options.debug("Eye: Writing custom commands");
+
         stores.push((
             data.store_path.join("commands.txt"),
             data.commands
@@ -42,6 +44,8 @@ pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
         ))
     }
     if data.options.features.counters {
+        data.options.debug("Eye: Writing counters");
+
         stores.push((
             data.store_path.join("counters.txt"),
             data.counters
@@ -50,6 +54,29 @@ pub(super) async fn refresh(data: super::StoreInner) -> std::io::Result<()> {
                 .collect::<Vec<_>>()
                 .join("\n"),
         ));
+    }
+    if data.options.features.listeners {
+        data.options.debug("Eye: Writing listeners");
+
+        stores.push((
+            data.store_path.join("listeners.txt"),
+            data.listeners
+                .iter()
+                .map(|(k, v)| {
+                    let (kind, pattern) = match &v.predicate {
+                        super::listener::Predicate::Exactly(pat) => ('e', pat.as_str()),
+                        super::listener::Predicate::Contains(pat) => ('c', pat.as_str()),
+                        super::listener::Predicate::Regex(pat) => ('r', pat.as_str()),
+                    };
+                    format!(
+                        "{kind} {k} {}/{}",
+                        pattern.replace('\\', "\\\\").replace('/', "\\/"),
+                        v.body.as_words_string()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ))
     }
 
     drop(data);
@@ -69,6 +96,8 @@ pub(super) async fn load(data: Arc<RwLock<super::StoreData>>) -> std::io::Result
     let mut data = data.write().await;
 
     if data.options.features.custom_commands {
+        data.options.debug("Eye: Loading custom commands");
+
         for command in read_create(data.store_path.join("commands.txt")).await? {
             let command = command.trim();
 
@@ -85,6 +114,8 @@ pub(super) async fn load(data: Arc<RwLock<super::StoreData>>) -> std::io::Result
     }
 
     if data.options.features.counters {
+        data.options.debug("Eye: Loading counters");
+
         for counter in read_create(data.store_path.join("counters.txt")).await? {
             let counter = counter.trim();
 
@@ -93,6 +124,32 @@ pub(super) async fn load(data: Arc<RwLock<super::StoreData>>) -> std::io::Result
                     data.counters.insert(String::from(name), count);
                 }
             }
+        }
+    }
+
+    if data.options.features.listeners {
+        data.options.debug("Eye: Loading listeners");
+
+        for listener in read_create(data.store_path.join("listeners.txt")).await? {
+            let listener = listener.trim();
+
+            let kind = listener.chars().next().unwrap();
+            let Some((name, pattern, command)) = super::listener::Listener::parts(&listener.chars().skip(2).collect::<String>()) else { continue; };
+
+            let predicate = match kind {
+                'e' => super::listener::Predicate::Exactly(pattern),
+                'c' => super::listener::Predicate::Contains(pattern),
+                'r' => {
+                    let Ok(regex) = regex::Regex::new(&pattern) else { continue; };
+                    super::listener::Predicate::Regex(regex)
+                }
+                _ => continue,
+            };
+
+            let Ok(body) = super::command::CommandRules::parse(&command) else { continue; };
+
+            data.listeners
+                .insert(name, super::listener::Listener { predicate, body });
         }
     }
 

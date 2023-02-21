@@ -189,7 +189,7 @@ impl ChatClient {
             globaluserstate: bool,
         }
 
-        self.options.debug("Chat: Authenticating with Twitch irc");
+        self.options.debug("Chat: Authenticating with Twitch IRC");
 
         self.client.send(Command::CAP(
             None,

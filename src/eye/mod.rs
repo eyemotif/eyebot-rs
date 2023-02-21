@@ -6,6 +6,7 @@ use tokio::sync::RwLock;
 mod builtin;
 mod command;
 mod io;
+mod listener;
 
 #[derive(Debug)]
 pub struct Store(StoreInner);
@@ -16,9 +17,11 @@ type StoreInner = Arc<RwLock<StoreData>>;
 struct StoreData {
     pub options: crate::options::Options,
     pub store_path: PathBuf,
+    pub error_reporter: tokio::sync::mpsc::Sender<crate::bot::error::BotError>,
+
     pub commands: HashMap<String, Arc<command::CommandRules>>,
     pub counters: HashMap<String, i64>,
-    pub error_reporter: tokio::sync::mpsc::Sender<crate::bot::error::BotError>,
+    pub listeners: HashMap<String, listener::Listener>,
 }
 
 impl Store {
@@ -30,6 +33,8 @@ impl Store {
         let store = Store(Arc::new(RwLock::new(StoreData {
             commands: HashMap::new(),
             counters: HashMap::new(),
+            listeners: HashMap::new(),
+
             store_path: store_path.into(),
             error_reporter: bot.error_reporter(),
             options,

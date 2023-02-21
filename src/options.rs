@@ -15,6 +15,7 @@ pub struct Features {
     pub eye: bool,
     pub custom_commands: bool,
     pub counters: bool,
+    pub listeners: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
@@ -46,6 +47,7 @@ impl Default for Features {
             eye: true,
             custom_commands: true,
             counters: true,
+            listeners: true,
         }
     }
 }

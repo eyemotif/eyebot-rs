@@ -3,6 +3,7 @@ use crate::bot::interface::BotInterface;
 use crate::chat::data::ChatMessage;
 use std::collections::HashSet;
 
+// TODO: multiple chat messages?
 #[derive(Debug)]
 pub struct CommandRules {
     pub body: Vec<CommandSection>,
