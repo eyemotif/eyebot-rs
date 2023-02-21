@@ -1,2 +1,4 @@
 [exec]
 debug = true
+[bot]
+duplicate_message_depth = 1

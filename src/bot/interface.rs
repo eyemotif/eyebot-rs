@@ -1,8 +1,9 @@
-use std::sync::Arc;
-
 use super::error::BotError;
 use crate::chat::interface::ChatInterface;
 use crate::twitch::HelixAuth;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub struct BotInterface(pub(super) Arc<InterfaceData>);
@@ -12,12 +13,30 @@ pub struct InterfaceData {
     pub helix_auth: HelixAuth,
     pub chat: ChatInterface,
     pub error_reporter: tokio::sync::mpsc::Sender<super::error::BotError>,
+    pub message_history: Arc<(Mutex<VecDeque<String>>, usize)>,
 }
 
 impl BotInterface {
     pub async fn say<S: Into<String>>(&self, message: S) {
-        if let Err(err) = self.0.chat.say(message) {
+        let message = message.into();
+
+        let (history, cap) = &*self.0.message_history;
+        let mut history = history.lock().await;
+        if history.contains(&message) {
+            return;
+        }
+
+        if let Err(err) = self.0.chat.say(message.clone()) {
+            drop(history);
             let _ = self.0.error_reporter.send(BotError::Say(err)).await;
+            return;
+        }
+
+        if *cap > 0 {
+            if history.len() >= *cap {
+                history.pop_front();
+            }
+            history.push_back(message);
         }
     }
     pub async fn reply<S: Into<String>>(

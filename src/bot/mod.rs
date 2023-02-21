@@ -2,6 +2,7 @@ use crate::chat;
 use crate::eventsub;
 use crate::twitch;
 use error::BotError;
+use std::collections::VecDeque;
 use std::future::Future;
 use tokio::sync::mpsc;
 
@@ -54,6 +55,12 @@ impl Bot {
                 helix_auth,
                 chat: chat_client.get_interface(),
                 error_reporter: error_sender,
+                message_history: std::sync::Arc::new((
+                    tokio::sync::Mutex::new(VecDeque::with_capacity(
+                        options.bot.duplicate_message_depth,
+                    )),
+                    options.bot.duplicate_message_depth,
+                )),
             })),
             error_listener: error_receiver,
             chat_client,
