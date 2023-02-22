@@ -5,4 +5,5 @@ pub struct BotData {
     pub bot_username: String,
     pub chat_channel: String,
     pub subscriptions: Vec<crate::eventsub::subscription::Subscription>,
+    pub chat_implicit_access: Option<String>,
 }

@@ -25,7 +25,10 @@ impl Bot {
     ) -> Result<Self, BotError> {
         let chat_client = chat::client::ChatClient::new(
             chat::data::ChatClientData {
-                access: data.access.clone(),
+                access: match data.chat_implicit_access {
+                    Some(access) => crate::chat::data::ChatAccess::Implicit(access),
+                    None => crate::chat::data::ChatAccess::Authorization(data.access.clone()),
+                },
                 bot_username: data.bot_username,
                 chat_channel: data.chat_channel,
             },

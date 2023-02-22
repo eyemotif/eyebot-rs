@@ -1,4 +1,4 @@
-use super::data::ChatMessage;
+use super::data::{ChatAccess, ChatMessage};
 use super::error::ChatClientError;
 use super::interface::ChatInterface;
 use crate::chat::tag;
@@ -201,7 +201,10 @@ impl ChatClient {
         ))?;
         self.client.send(Command::PASS(format!(
             "oauth:{}",
-            self.data.access.get_credentials().await?.access_token
+            match &self.data.access {
+                ChatAccess::Authorization(access) => access.get_credentials().await?.access_token,
+                ChatAccess::Implicit(access) => access.clone(),
+            }
         )))?;
         self.client
             .send(Command::NICK(self.data.bot_username.clone()))?;

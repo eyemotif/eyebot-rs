@@ -7,10 +7,12 @@ use clap::Parser;
 pub struct Cli {
     #[arg(long)]
     pub oauth: Option<String>,
-    #[arg(long)]
+    #[arg(short = 'i', long)]
     pub clientid: String,
-    #[arg(long)]
+    #[arg(short = 's', long)]
     pub clientsecret: String,
+    #[arg(short = 'c', long = "chat-access")]
+    pub chat_access: Option<String>,
     #[arg(long)]
     pub store: Option<String>,
     #[arg(long)]

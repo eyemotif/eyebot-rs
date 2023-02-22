@@ -1,13 +1,18 @@
+pub use super::tag::EmoteInfo;
 use crate::auth::access::AccessTokenManager;
 use std::collections::HashSet;
 
-pub use super::tag::EmoteInfo;
-
 #[derive(Debug)]
 pub struct ChatClientData {
-    pub access: AccessTokenManager,
+    pub access: ChatAccess,
     pub bot_username: String,
     pub chat_channel: String,
+}
+
+#[derive(Debug)]
+pub enum ChatAccess {
+    Authorization(AccessTokenManager),
+    Implicit(String),
 }
 
 #[derive(Debug, Clone, Default)]

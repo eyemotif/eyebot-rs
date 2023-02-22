@@ -87,6 +87,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 broadcaster_user_id: broadcaster_user_id.clone(),
                 reward_id: None,
             }],
+            chat_implicit_access: args.chat_access,
         },
         options,
     )
