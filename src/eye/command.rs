@@ -64,10 +64,8 @@ impl CommandRules {
                     }
                 }
                 '%' if !escape => {
-                    if !(current_word.starts_with('%') || current_word.starts_with('&')) {
-                        output.body.push(CommandSection::Echo(current_word + ""));
-                        current_word = String::from("%");
-                    }
+                    output.body.push(CommandSection::Echo(current_word + ""));
+                    current_word = String::from("%");
                 }
                 '\\' => {
                     if escape {
@@ -77,7 +75,9 @@ impl CommandRules {
                         continue;
                     }
                 }
-                'a'..='z' | 'A'..='Z' | '0'..='9' | '=' | '_' => current_word.push(chr),
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '=' | '_' | ':' if !escape => {
+                    current_word.push(chr)
+                }
                 misc_chr => {
                     if let Some(var_string) = current_word.strip_prefix('%') {
                         output.body.push(CommandRules::var_from_string(var_string)?);
@@ -183,8 +183,7 @@ impl CommandRules {
                 CommandSection::Counter(name) => if let Some(counter_value) = data.read().await.counters.get(name) {
                     counter_value.to_string()
                 } else {
-                    bot.reply(&msg, format!("Error: Counter {name:?} not found.")).await;
-                    return;
+                    format!("%counter={name}")
                 },
             })
         }
