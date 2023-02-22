@@ -47,22 +47,24 @@ using Twitch chat, with some built-in commands, all of which are *mod-only*:
 
 There are three types of data in a custom command: Text, Variables, and Tags.
 
-* Text is just plain text. What is input will be output as-is.
-* Variables are pieces of text that can change per-execution. All variables
+* **Text** is just plain text. What is input will be output as-is.
+* **Variables** are pieces of text that can change per-execution. All variables
   start with `%`:
   * `%name`: The display name of the command caller.
   * `%<number>`: The `number`-th argument of the command. If something like
-    `!command a b c` is called, `a` is `%0`, `%b` is `%1`, and so on.
-  * `%counter=<counter-name>`: The value of the [counter](#counters) defined by `<counter-name>`. 
-* Tags are metadata that are not output, but tell the command how to execute.
+    `!command a b c` is called, `a` is `%0`, `%b` is `%1`, and so on. If the
+    argument doesn't exist, the tag will be output as if it were Text.
+  * `%counter=<counter-name>`: The value of the [counter](#counters) defined by `<counter-name>`. If the
+    counter doesn't exist, the tag will be output as if it were Text.
+* **Tags** are metadata that are not output, but tell the command how to execute. 
   All tags start with `&`:
-  *  `&REPLY`: Replies to the command caller instead of just sending a chat message.
-  *  `&SUPER`: Prevents non-mods from calling the command.
-  *  `&TEMP`: Prevents the command from being [saved to disk](#disk-interactions).
-  *  `&C:INC=<counter-name>`: Increments the [counter](#counters) defined by `<counter-name>`.
-  *  `&C:DEC=<counter-name>`: Decrements the [counter](#counters) defined by `<counter-name>`.
-  *  `&C:ZERO=<counter-name>`: Sets the value of the [counter](#counters) defined by
-     `<counter-name>` to zero.
+  * `&REPLY`: Replies to the command caller instead of just sending a chat message.
+  * `&SUPER`: Prevents non-mods from calling the command.
+  * `&TEMP`: Prevents the command from being [saved to disk](#disk-interactions).
+  * `&C:INC=<counter-name>`: Increments the [counter](#counters) defined by `<counter-name>`.
+  * `&C:DEC=<counter-name>`: Decrements the [counter](#counters) defined by `<counter-name>`.
+  * `&C:ZERO=<counter-name>`: Sets the value of the [counter](#counters) defined by
+    `<counter-name>` to zero.
 
 Note that variable names only contain letters, numbers, `=`, `_`, and `:`. Any
 other characters will be parsed as Text, so something like `@%name!` would
@@ -96,7 +98,8 @@ using Twitch chat, with some built-in commands, all of which are *mod-only*:
 * `!listen:has <listener-name> <pattern>/<command>`: When a chat message
   *contains* `<pattern>`, the listener executes.
 * `!listen:regex <listener-name> <pattern>/<command>`: When a chat message
-  *matches the regex* `<pattern>`, the listener executes.
+  *matches the regex* `<pattern>`, the listener executes. Argument variables are
+  set to the pattern's respective match groups.
 * `!listen:info <listener-name>`: Outputs a listener and its
   [command](#custom-command-format) in its raw form, with its Pattern, Tags and Variables
   spelled out.
