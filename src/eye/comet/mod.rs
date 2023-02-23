@@ -188,6 +188,10 @@ impl Server {
         }
     }
 
+    pub fn interface(&self) -> CometInterface {
+        self.interface.clone()
+    }
+
     async fn handle_client(
         client: Weak<Mutex<Client>>,
         task_name: String,

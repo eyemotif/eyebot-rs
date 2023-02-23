@@ -101,6 +101,58 @@ impl Bot {
             }
         }
     }
+    pub fn on_chat_message_comet<Fut: Future>(
+        &self,
+        comet_server: &crate::eye::comet::Server,
+        mut f: impl FnMut(
+            crate::chat::data::ChatMessage,
+            interface::BotInterface,
+            crate::eye::comet::CometInterface,
+        ) -> Fut,
+    ) -> impl Future<Output = ()> {
+        let interface = self.interface.0.clone();
+        let mut receiver = self.chat_client.subscribe();
+        let comet = comet_server.interface();
+
+        async move {
+            while receiver.changed().await.is_ok() {
+                let chat_message = receiver.borrow().clone();
+                f(
+                    chat_message,
+                    interface::BotInterface(interface.clone()),
+                    comet.clone(),
+                )
+                .await;
+            }
+        }
+    }
+    pub fn on_event_comet<E: crate::eventsub::event::Event, Fut: Future>(
+        &self,
+        comet_server: &crate::eye::comet::Server,
+        mut f: impl FnMut(
+            crate::eventsub::data::NotificationMessage<E>,
+            interface::BotInterface,
+            crate::eye::comet::CometInterface,
+        ) -> Fut,
+    ) -> impl Future<Output = ()> {
+        let interface = self.interface.0.clone();
+        let mut receiver = self.eventsub_client.subscribe();
+        let comet = comet_server.interface();
+
+        async move {
+            while receiver.changed().await.is_ok() {
+                let value = receiver.borrow().clone();
+                if let Ok(value) = serde_json::from_value(value) {
+                    f(
+                        value,
+                        interface::BotInterface(interface.clone()),
+                        comet.clone(),
+                    )
+                    .await;
+                }
+            }
+        }
+    }
 
     #[must_use]
     pub fn interface(&self) -> interface::BotInterface {

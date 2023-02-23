@@ -3,7 +3,7 @@ use ring::rand::SecureRandom;
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CometInterface(Arc<Mutex<InterfaceData>>);
 
 #[derive(Debug)]
@@ -97,8 +97,4 @@ impl CometInterface {
     pub(super) async fn set_state(&self, new_state: String) {
         *self.0.lock().await.state.write().await = Some(new_state);
     }
-
-    // pub(super) fn clone(&self) -> Self {
-    //     Self(self.0.clone())
-    // }
 }

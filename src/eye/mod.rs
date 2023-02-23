@@ -49,4 +49,12 @@ impl Store {
     ) -> impl std::future::Future<Output = ()> + 'static {
         builtin::register_base_commands(self, bot)
     }
+
+    pub fn register_comet_commands(
+        &self,
+        bot: &crate::bot::Bot,
+        comet_server: &comet::Server,
+    ) -> impl std::future::Future<Output = ()> + 'static {
+        builtin::register_comet_commands(self, bot, comet_server)
+    }
 }

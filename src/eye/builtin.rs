@@ -444,3 +444,29 @@ pub fn register_base_commands(
         }
     }
 }
+
+pub fn register_comet_commands(
+    store: &super::Store,
+    bot: &crate::bot::Bot,
+    comet_server: &super::comet::Server,
+) -> impl std::future::Future<Output = ()> + 'static {
+    let data = store.0.clone();
+    let command_future = bot.on_chat_message_comet(comet_server, move |msg, bot, cmt| {
+        let data = data.clone();
+        async move { todo!() }
+    });
+
+    let data = store.0.clone();
+    async move {
+        let mut data = data.write().await;
+        for builtin in [""] {
+            data.commands.insert(
+                String::from(builtin),
+                Arc::new(super::command::CommandRules::empty_builtin(true)),
+            );
+        }
+        drop(data);
+
+        command_future.await;
+    }
+}

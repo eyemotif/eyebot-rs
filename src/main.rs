@@ -96,13 +96,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if options.features.eye {
         let eye_store = eye::Store::new(tokens_store_path.clone(), &bot, options).await?;
         tokio::spawn(eye_store.register_base_commands(&bot));
-    }
 
-    if options.features.comet {
-        // TODO: add options for port
-        let server = eye::comet::Server::new(8000, bot.error_reporter(), options).await?;
+        if options.features.comet {
+            // TODO: add options for port
+            let comet_server = eye::comet::Server::new(8000, bot.error_reporter(), options).await?;
 
-        tokio::spawn(server.accept_connections());
+            tokio::spawn(comet_server.accept_connections());
+        }
     }
 
     tokio::spawn(
