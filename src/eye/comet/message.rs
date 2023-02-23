@@ -63,16 +63,6 @@ mod serde_arc_str {
     }
 }
 
-impl Response {
-    pub(super) fn clone(&self) -> Self {
-        Self {
-            state: self.state.clone(),
-            tag: self.tag.clone(),
-            data: self.data.clone(),
-        }
-    }
-}
-
 impl MessageTag {
     pub(super) fn clone(&self) -> Self {
         MessageTag(self.0.clone())

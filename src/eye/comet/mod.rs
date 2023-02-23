@@ -278,6 +278,7 @@ impl Server {
         loop {
             let Some(client) = client.upgrade() else { break; };
             let mut client = client.lock().await;
+
             match client.receiver.next().await {
                 Some(Ok(msg)) => match msg {
                     SocketMessage::Text(txt) => {
@@ -288,6 +289,8 @@ impl Server {
                                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Protocol,
                                         reason: "Invalid state".into()
                                     }))).await;
+
+                                    let _ = client.close_sender.send(()).await;
                                     break;
                                 }
 
@@ -300,6 +303,8 @@ impl Server {
                                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Protocol,
                                         reason: format!("Malformed response: {err}").into()
                                     }))).await;
+
+                                let _ = client.close_sender.send(()).await;
                                 break;
                             }
                         }
@@ -320,6 +325,7 @@ impl Server {
                     }
                     SocketMessage::Close(_) => {
                         options.debug(format!("Comet ({task_name}): Client sent close message"));
+                        let _ = client.close_sender.send(()).await;
                         break;
                     }
                     _ => (),
@@ -336,9 +342,13 @@ impl Server {
                                 .await;
                         }
                     }
+                    let _ = client.close_sender.send(()).await;
                     break;
                 }
-                None => break,
+                None => {
+                    let _ = client.close_sender.send(()).await;
+                    break;
+                }
             }
         }
 
@@ -374,13 +384,18 @@ impl Server {
 
             match ping_result {
                 Ok(()) => (),
-                Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => break,
+                Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => {
+                    let _ = client.lock().await.close_sender.send(()).await;
+                    break;
+                }
                 Err(err) => {
                     let _ = error_reporter
                         .send(crate::bot::error::BotError::Custom(format!(
                             "Error on sending a Ping message to a Comet client: {err}"
                         )))
                         .await;
+
+                    let _ = client.lock().await.close_sender.send(()).await;
                     break;
                 }
             }

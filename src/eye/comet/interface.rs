@@ -31,19 +31,15 @@ impl CometInterface {
         })))
     }
 
-    pub(super) async fn set_state(&self, new_state: String) {
-        *self.0.lock().await.state.write().await = Some(new_state);
-    }
-
-    pub fn send_message<Fut: std::future::Future>(
+    #[must_use]
+    pub fn send_message(
         &self,
         message: Message,
-        on_response: impl FnOnce(super::message::Response) -> Fut,
-    ) -> impl std::future::Future<Output = ()> {
+    ) -> impl std::future::Future<Output = super::message::ResponseData> {
         let data = self.0.clone();
 
         async move {
-            let mut data = data.lock().await;
+            let data = data.lock().await;
 
             let tag = loop {
                 let mut state = [0; 32];
@@ -62,34 +58,47 @@ impl CometInterface {
                 .expect("Interface should have its state set")
                 .clone();
 
-            match data
-                .message_sender
+            data.message_sender
                 .as_ref()
                 .expect("Comet server should be open")
                 .send(TaggedMessage {
                     tag: tag.clone(),
-                    state,
+                    state: state.clone(),
                     message,
                 })
                 .await
-            {
-                Ok(()) => (),
-                Err(_) => {
-                    data.message_sender = None;
-                    return;
-                }
-            }
+                .expect("Comet server should be open");
 
-            let Some(mut response_receiver) = data.response_receiver.as_ref().map(|r| r.clone()) else {return; };
+            let mut response_receiver = data
+                .response_receiver
+                .as_ref()
+                .map(|r| r.clone())
+                .expect("Comet server should be open");
             drop(data);
 
-            while response_receiver.changed().await.is_ok() {
+            loop {
+                response_receiver
+                    .changed()
+                    .await
+                    .expect("Comet server should be open");
+
+                if response_receiver.borrow().state != state {
+                    continue;
+                }
+
                 if response_receiver.borrow().tag.0 == tag.0 {
-                    let response = response_receiver.borrow_and_update().clone();
-                    on_response(response).await;
-                    break;
+                    let response = response_receiver.borrow_and_update().data.clone();
+                    return response;
                 }
             }
         }
     }
+
+    pub(super) async fn set_state(&self, new_state: String) {
+        *self.0.lock().await.state.write().await = Some(new_state);
+    }
+
+    // pub(super) fn clone(&self) -> Self {
+    //     Self(self.0.clone())
+    // }
 }
