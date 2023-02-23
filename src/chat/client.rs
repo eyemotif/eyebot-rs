@@ -2,12 +2,12 @@ use super::data::{ChatAccess, ChatMessage};
 use super::error::ChatClientError;
 use super::interface::ChatInterface;
 use crate::chat::tag;
+use futures_util::StreamExt;
 use irc::client::Client;
 use irc::proto::{Command, Response};
 use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
-use tokio_stream::StreamExt;
 
 #[derive(Debug)]
 pub struct ChatClient {

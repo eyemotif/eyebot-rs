@@ -17,6 +17,6 @@ pub struct Cli {
     pub store: Option<String>,
     #[arg(long)]
     pub reauth: bool,
-    #[arg(long = "options-file")]
+    #[arg(short = 'o', long = "options-file")]
     pub options_file: Option<String>,
 }

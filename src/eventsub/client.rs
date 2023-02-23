@@ -2,10 +2,10 @@ use super::data::{EventsubClientData, NotificationMessage};
 use super::error::EventsubError;
 use super::event::Event;
 use super::{data, outbound};
+use futures_util::StreamExt;
 use std::future::Future;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
-use tokio_stream::StreamExt;
 use tokio_tungstenite::tungstenite::Message;
 
 type Websocket =
