@@ -4,15 +4,15 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 mod builtin;
-mod comet;
+pub mod comet;
 mod command;
 mod io;
 mod listener;
 
+type StoreInner = Arc<RwLock<StoreData>>;
+
 #[derive(Debug)]
 pub struct Store(StoreInner);
-
-type StoreInner = Arc<RwLock<StoreData>>;
 
 #[derive(Debug)]
 struct StoreData {
