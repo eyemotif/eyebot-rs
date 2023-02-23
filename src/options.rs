@@ -17,6 +17,7 @@ pub struct Features {
     pub custom_commands: bool,
     pub counters: bool,
     pub listeners: bool,
+    pub comet: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
@@ -57,6 +58,7 @@ impl Default for Features {
             custom_commands: true,
             counters: true,
             listeners: true,
+            comet: false,
         }
     }
 }

@@ -98,6 +98,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(eye_store.register_base_commands(&bot));
     }
 
+    if options.features.comet {
+        // TODO: add options for port
+        let server = eye::comet::Server::new(8000, bot.error_reporter(), options).await?;
+        tokio::spawn(server.accept_connections());
+    }
+
     tokio::spawn(
         bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
             if notif.payload.event.reward.title == "Pop" {

@@ -35,17 +35,6 @@ impl CometInterface {
         *self.0.lock().await.state.write().await = Some(new_state);
     }
 
-    async fn create_message_id(&self) -> String {
-        let data = self.0.lock().await;
-        loop {
-            let mut state = [0; 32];
-            match data.rng.fill(&mut state) {
-                Ok(()) => return state.into_iter().map(|byte| format!("{byte:x?}")).collect(),
-                Err(_) => (),
-            }
-        }
-    }
-
     pub fn send_message<Fut: std::future::Future>(
         &self,
         message: Message,
