@@ -83,11 +83,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             access: token_manager,
             bot_username: String::from("eye___bot"),
             chat_channel: String::from("eye_motif"),
+            chat_implicit_access: args.chat_access,
             subscriptions: vec![Subscription::ChannelPointRedeem {
                 broadcaster_user_id: broadcaster_user_id.clone(),
                 reward_id: None,
             }],
-            chat_implicit_access: args.chat_access,
         },
         options,
     )

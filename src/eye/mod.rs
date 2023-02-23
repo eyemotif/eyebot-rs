@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 mod builtin;
+mod comet;
 mod command;
 mod io;
 mod listener;
