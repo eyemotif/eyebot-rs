@@ -130,7 +130,7 @@ impl Server {
                 }
             };
 
-            // FIXME: on a new connection, this doesn't fire
+            // FIXME: on a new connection, this doesn't fire sometimes
             match sender
                 .send(SocketMessage::Text(
                     serde_json::to_string(&self::message::TaggedMessage {

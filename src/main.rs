@@ -103,18 +103,49 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             tokio::spawn(eye_store.register_comet_commands(&bot, &comet_server));
 
+            tokio::spawn(bot.on_event_comet::<event::ChannelPointRedeem, _>(
+                &comet_server,
+                |notif, bot, cmt| async move {
+                    if notif.payload.event.reward.title == "Play Audio" {
+                        let input = notif
+                            .payload
+                            .event
+                            .user_input
+                            .expect("User input should be set");
+
+                        let input = eye::comet::component::Sound::parse(&input);
+                        match cmt
+                            .send_message(eye::comet::Message::PlayAudio { data: input })
+                            .await
+                            .expect("Comet server should be open")
+                        {
+                            eye::comet::ResponseData::Ok => (),
+                            eye::comet::ResponseData::Data { payload: _ } => unreachable!(),
+                            eye::comet::ResponseData::Error {
+                                is_internal,
+                                message,
+                            } => {
+                                if !is_internal {
+                                    bot.say(message).await;
+                                }
+                            }
+                        }
+                    }
+                },
+            ));
+
             tokio::spawn(comet_server.accept_connections());
         }
     }
 
-    tokio::spawn(
-        bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
-            if notif.payload.event.reward.title == "Pop" {
-                bot.say(format!("{} redeemed Pop!", notif.payload.event.user_name))
-                    .await;
-            }
-        }),
-    );
+    // tokio::spawn(
+    //     bot.on_event::<event::ChannelPointRedeem, _>(|notif, bot| async move {
+    //         if notif.payload.event.reward.title == "Pop" {
+    //             bot.say(format!("{} redeemed Pop!", notif.payload.event.user_name))
+    //                 .await;
+    //         }
+    //     }),
+    // );
 
     bot.run().await?;
 

@@ -10,3 +10,19 @@ pub enum Type {
 pub struct Sound {
     pub name: String,
 }
+
+impl Sound {
+    pub fn parse(input: &str) -> Vec<Vec<Sound>> {
+        input
+            .trim()
+            .split([' ', ','])
+            .map(|word| {
+                word.split('+')
+                    .map(|sound| Sound {
+                        name: String::from(sound),
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+}

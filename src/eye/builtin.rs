@@ -499,17 +499,7 @@ pub fn register_comet_commands(
                     }
                 }
             } else if let Some(body) = msg.text.strip_prefix("!comet:play-audio") {
-                let sounds = body
-                    .trim()
-                    .split([' ', ','])
-                    .map(|word| {
-                        word.split('+')
-                            .map(|sound| comet::component::Sound {
-                                name: String::from(sound),
-                            })
-                            .collect()
-                    })
-                    .collect();
+                let sounds = super::comet::component::Sound::parse(body);
 
                 let play_response = match cmt
                     .send_message(comet::Message::PlayAudio { data: sounds })
