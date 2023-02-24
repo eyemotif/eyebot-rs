@@ -498,8 +498,9 @@ pub fn register_comet_commands(
                         .await;
                     }
                 }
-            } else if let Some(body) = msg.text.strip_prefix("!comet:play-sound") {
+            } else if let Some(body) = msg.text.strip_prefix("!comet:play-audio") {
                 let sounds = body
+                    .trim()
                     .split([' ', ','])
                     .map(|word| {
                         word.split('+')
