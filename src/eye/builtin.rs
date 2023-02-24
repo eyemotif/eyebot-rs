@@ -465,12 +465,19 @@ pub fn register_comet_commands(
                     }
                 };
 
-                let Some(get_response) = cmt
+                let get_response = match cmt
                     .send_message(comet::Message::GetComponents { component_type })
-                    .await else {
-                        data.read().await.options.debug("Builtin: Comet client disconnected before response");
-                        return; 
-                    };
+                    .await
+                {
+                    Some(it) => it,
+                    None => {
+                        data.read()
+                            .await
+                            .options
+                            .debug("Builtin: Comet client disconnected before response");
+                        return;
+                    }
+                };
 
                 match get_response {
                     comet::ResponseData::Ok => {
@@ -503,12 +510,19 @@ pub fn register_comet_commands(
                     })
                     .collect();
 
-                let Some(play_response) = cmt
+                let play_response = match cmt
                     .send_message(comet::Message::PlayAudio { data: sounds })
-                    .await else {
-                        data.read().await.options.debug("Builtin: Comet client disconnected before response");
-                        return; 
-                    };
+                    .await
+                {
+                    Some(it) => it,
+                    None => {
+                        data.read()
+                            .await
+                            .options
+                            .debug("Builtin: Comet client disconnected before response");
+                        return;
+                    }
+                };
 
                 match play_response {
                     comet::ResponseData::Ok => (),

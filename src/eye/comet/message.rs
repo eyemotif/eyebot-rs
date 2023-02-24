@@ -27,7 +27,7 @@ pub(super) struct TaggedMessage {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+// #[serde(deny_unknown_fields)] https://github.com/serde-rs/serde/issues/1600
 pub struct Response {
     pub(super) state: String,
     pub(super) tag: MessageTag,
@@ -37,7 +37,7 @@ pub struct Response {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-#[serde(tag = "type", content = "payload")]
+#[serde(tag = "type")]
 #[serde(deny_unknown_fields)]
 pub enum ResponseData {
     Ok,
