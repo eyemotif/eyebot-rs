@@ -24,7 +24,7 @@ impl ChatClient {
         data: super::data::ChatClientData,
         options: crate::options::Options,
     ) -> Result<Self, ChatClientError> {
-        options.debug("Chat: connecting to Twitch");
+        options.debug("Chat: Connecting to Twitch");
 
         let mut client = Client::from_config(irc::client::prelude::Config {
             owners: vec![String::from("eyebot-rs")],

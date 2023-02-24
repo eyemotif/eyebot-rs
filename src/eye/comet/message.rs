@@ -1,4 +1,5 @@
 use super::component;
+use ring::rand::SecureRandom;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -10,7 +11,7 @@ pub enum Message {
     },
     GetComponents {
         #[serde(rename = "type")]
-        component_kind: component::Type,
+        component_type: component::Type,
     },
     PlayAudio {
         data: Vec<Vec<component::Sound>>,
@@ -64,6 +65,19 @@ mod serde_arc_str {
 }
 
 impl MessageTag {
+    pub(super) fn new() -> Self {
+        lazy_static::lazy_static!(
+            static ref RNG: ring::rand::SystemRandom = ring::rand::SystemRandom::new();
+        );
+
+        Self(std::sync::Arc::new(loop {
+            let mut state = [0; 16];
+            match RNG.fill(&mut state) {
+                Ok(()) => break state.into_iter().map(|byte| format!("{byte:x?}")).collect(),
+                Err(_) => (),
+            };
+        }))
+    }
     pub(super) fn clone(&self) -> Self {
         MessageTag(self.0.clone())
     }

@@ -1,9 +1,9 @@
 use futures_util::{SinkExt, StreamExt};
 use ring::rand::SecureRandom;
 use std::sync::{Arc, Weak};
-use tokio::sync::Mutex;
-use tokio::sync::{mpsc, watch};
-use tokio_tungstenite::tungstenite::Message as SocketMessage;
+use tokio::sync::{mpsc, watch, Mutex};
+use tokio_tungstenite::tungstenite::error::ProtocolError;
+use tokio_tungstenite::tungstenite::{Error as SocketError, Message as SocketMessage};
 
 pub mod component;
 mod interface;
@@ -16,7 +16,7 @@ pub use message::{Message, Response, ResponseData};
 pub struct Server {
     server: tokio::net::TcpListener,
     error_reporter: mpsc::Sender<crate::bot::error::BotError>,
-    client: Option<Arc<Mutex<Client>>>,
+    client: Option<Arc<Client>>,
     message_receiver: Arc<Mutex<mpsc::Receiver<message::TaggedMessage>>>,
     response_sender: Arc<watch::Sender<message::Response>>,
     interface: CometInterface,
@@ -25,15 +25,28 @@ pub struct Server {
 
 #[derive(Debug)]
 struct Client {
-    sender: futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-        SocketMessage,
+    sender: Mutex<
+        futures_util::stream::SplitSink<
+            tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+            SocketMessage,
+        >,
     >,
-    receiver: futures_util::stream::SplitStream<
-        tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    receiver: Mutex<
+        futures_util::stream::SplitStream<
+            tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+        >,
     >,
     state: String,
     close_sender: mpsc::Sender<()>,
+}
+
+macro_rules! close_err {
+    () => {
+        Err(SocketError::ConnectionClosed)
+            | Err(SocketError::AlreadyClosed)
+            | Err(SocketError::Protocol(ProtocolError::SendAfterClosing))
+            | Err(SocketError::Protocol(ProtocolError::ReceivedAfterClosing))
+    };
 }
 
 impl Server {
@@ -66,21 +79,6 @@ impl Server {
     }
 
     pub async fn accept_connections(mut self) {
-        let rng = ring::rand::SystemRandom::new();
-        // https://docs.rs/ring/latest/ring/rand/struct.SystemRandom.html
-        match rng.fill(&mut []) {
-            Ok(()) => (),
-            Err(_) => {
-                let _ = self
-                    .error_reporter
-                    .send(crate::bot::error::BotError::Custom(String::from(
-                        "Could not create random data",
-                    )))
-                    .await;
-                return;
-            }
-        }
-
         self.options.debug("Comet: Accepting connections!");
 
         loop {
@@ -97,6 +95,7 @@ impl Server {
 
             let socket = match tokio_tungstenite::accept_async(connection).await {
                 Ok(it) => it,
+                Err(SocketError::Protocol(_)) => continue,
                 Err(err) => {
                     let _ = self
                         .error_reporter
@@ -118,7 +117,7 @@ impl Server {
 
             let (mut sender, receiver) = socket.split();
 
-            let state = match Server::create_state(&rng) {
+            let state = match Server::create_state() {
                 Ok(it) => it,
                 Err(_) => {
                     let _ = self
@@ -133,8 +132,12 @@ impl Server {
 
             match sender
                 .send(SocketMessage::Text(
-                    serde_json::to_string(&Message::Register {
+                    serde_json::to_string(&self::message::TaggedMessage {
+                        message: Message::Register {
+                            state: state.clone(),
+                        },
                         state: state.clone(),
+                        tag: message::MessageTag::new(),
                     })
                     .expect("Constant data should serialize"),
                 ))
@@ -157,26 +160,27 @@ impl Server {
                 .debug(format!("Comet: Registered client (state: {state})"));
 
             let (close_sender, close_receiver) = mpsc::channel(1);
-            let client = Arc::new(Mutex::new(Client {
-                sender,
-                receiver,
+            let client = Arc::new(Client {
+                sender: Mutex::new(sender),
+                receiver: Mutex::new(receiver),
                 state,
                 close_sender,
-            }));
+            });
 
             tokio::spawn(Server::handle_client(
                 Arc::downgrade(&client),
-                client.lock().await.short_state(),
+                client.short_state(),
                 self.error_reporter.clone(),
                 self.message_receiver.clone(),
                 self.response_sender.clone(),
                 close_receiver,
+                self.interface.clone(),
                 self.options,
             ));
 
             match self.client.replace(client) {
                 Some(old_client) => {
-                    let _ = old_client.lock().await.sender.send(SocketMessage::Close(Some(
+                    let _ = old_client.sender.lock().await.send(SocketMessage::Close(Some(
                     tokio_tungstenite::tungstenite::protocol::CloseFrame {
                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                         reason: "Server received new connection".into()
@@ -193,12 +197,13 @@ impl Server {
     }
 
     async fn handle_client(
-        client: Weak<Mutex<Client>>,
+        client: Weak<Client>,
         task_name: String,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         message_receiver: Arc<Mutex<mpsc::Receiver<message::TaggedMessage>>>,
         response_sender: Arc<watch::Sender<message::Response>>,
         close_receiver: mpsc::Receiver<()>,
+        interface: CometInterface,
         options: crate::options::Options,
     ) {
         tokio::join!(
@@ -219,10 +224,13 @@ impl Server {
                 options
             )
         );
+
+        interface.set_disconnected().await;
+        options.debug(format!("Comet ({task_name}): Client disconnected!"))
     }
 
     async fn client_outbound(
-        client: Weak<Mutex<Client>>,
+        client: Weak<Client>,
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         message_receiver: Arc<Mutex<mpsc::Receiver<message::TaggedMessage>>>,
@@ -238,21 +246,22 @@ impl Server {
                 else => break,
             };
 
-            options.debug(format!("Comet: Outbound {message:?}"));
-
             let Some(client) = client.upgrade() else { break; };
 
+            options.debug(format!("Comet: Outbound: {:?}", message.message));
+
             let write_result = client
+                .sender
                 .lock()
                 .await
-                .sender
                 .send(SocketMessage::Text(
-                    serde_json::to_string(&message).expect("Constant data should serialize"),
+                    serde_json::to_string(&message).expect("Data should serialize"),
                 ))
                 .await;
+
             match write_result {
                 Ok(()) => (),
-                Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => break,
+                close_err!() => break,
                 Err(err) => {
                     let _ = error_reporter
                         .send(crate::bot::error::BotError::Custom(
@@ -271,7 +280,7 @@ impl Server {
     }
 
     async fn client_inbound(
-        client: Weak<Mutex<Client>>,
+        client: Weak<Client>,
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         response_sender: Arc<watch::Sender<message::Response>>,
@@ -281,15 +290,14 @@ impl Server {
 
         loop {
             let Some(client) = client.upgrade() else { break; };
-            let mut client = client.lock().await;
 
-            match client.receiver.next().await {
+            match client.receiver.lock().await.next().await {
                 Some(Ok(msg)) => match msg {
                     SocketMessage::Text(txt) => {
                         match serde_json::from_str::<message::Response>(&txt) {
                             Ok(response) => {
                                 if response.state != client.state {
-                                    let _ = client.sender.send(SocketMessage::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                                    let _ = client.sender.lock().await.send(SocketMessage::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
                                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Protocol,
                                         reason: "Invalid state".into()
                                     }))).await;
@@ -298,12 +306,15 @@ impl Server {
                                     break;
                                 }
 
-                                options.debug(format!("Comet: Inbound {response:?}"));
+                                options.debug(format!(
+                                    "Comet ({task_name}): Inbound: {:?}",
+                                    response.data
+                                ));
 
                                 let _ = response_sender.send(response);
                             }
                             Err(err) => {
-                                let _ = client.sender.send(SocketMessage::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                                let _ = client.sender.lock().await.send(SocketMessage::Close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
                                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Protocol,
                                         reason: format!("Malformed response: {err}").into()
                                     }))).await;
@@ -314,9 +325,15 @@ impl Server {
                         }
                     }
                     SocketMessage::Ping(data) => {
-                        match client.sender.send(SocketMessage::Pong(data)).await {
+                        match client
+                            .sender
+                            .lock()
+                            .await
+                            .send(SocketMessage::Pong(data))
+                            .await
+                        {
                             Ok(()) => (),
-                            Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => break,
+                            close_err!() => break,
                             Err(err) => {
                                 let _ = error_reporter
                                 .send(crate::bot::error::BotError::Custom(format!(
@@ -336,9 +353,11 @@ impl Server {
                 },
                 Some(Err(err)) => {
                     match err {
-                        tokio_tungstenite::tungstenite::Error::ConnectionClosed
-                        | tokio_tungstenite::tungstenite::Error::AlreadyClosed => (),
-                        err => {
+                        SocketError::ConnectionClosed
+                        | SocketError::AlreadyClosed
+                        | SocketError::Protocol(ProtocolError::SendAfterClosing)
+                        | SocketError::Protocol(ProtocolError::ReceivedAfterClosing) => (),
+                        _ => {
                             let _ = error_reporter
                                 .send(crate::bot::error::BotError::Custom(format!(
                                     "Error on receiving from a comet websocket connection: {err}"
@@ -353,14 +372,23 @@ impl Server {
                     let _ = client.close_sender.send(()).await;
                     break;
                 }
-            }
+            }; // semicolon is required for drop checker
         }
 
+        // Flush any threads waiting on a response
+        let _ = response_sender.send(Response {
+            state: String::from("CLOSE"),
+            tag: message::MessageTag(Arc::new(String::new())),
+            data: ResponseData::Error {
+                is_internal: true,
+                message: String::from("This error should never be handled"),
+            },
+        });
         options.debug(format!("Comet ({task_name}): Inbound task closed"));
     }
 
     async fn client_ping(
-        client: Weak<Mutex<Client>>,
+        client: Weak<Client>,
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         options: crate::options::Options,
@@ -380,16 +408,16 @@ impl Server {
                 .to_vec();
 
             let ping_result = client
+                .sender
                 .lock()
                 .await
-                .sender
                 .send(SocketMessage::Ping(ping_data))
                 .await;
 
             match ping_result {
                 Ok(()) => (),
-                Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => {
-                    let _ = client.lock().await.close_sender.send(()).await;
+                close_err!() => {
+                    let _ = client.close_sender.send(()).await;
                     break;
                 }
                 Err(err) => {
@@ -399,7 +427,6 @@ impl Server {
                         )))
                         .await;
 
-                    let _ = client.lock().await.close_sender.send(()).await;
                     break;
                 }
             }
@@ -408,9 +435,13 @@ impl Server {
         options.debug(format!("Comet ({task_name}): Ping task closed"));
     }
 
-    fn create_state(rng: &ring::rand::SystemRandom) -> Result<String, ring::error::Unspecified> {
+    fn create_state() -> Result<String, ring::error::Unspecified> {
+        lazy_static::lazy_static!(
+            static ref RNG: ring::rand::SystemRandom = ring::rand::SystemRandom::new();
+        );
+
         let mut state = [0; 32];
-        rng.fill(&mut state)?;
+        RNG.fill(&mut state)?;
         Ok(state.into_iter().map(|byte| format!("{byte:x?}")).collect())
     }
 }

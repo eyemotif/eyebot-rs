@@ -1,7 +1,7 @@
-use super::data::{EventsubClientData, NotificationMessage};
+use super::data::{self, EventsubClientData, NotificationMessage};
 use super::error::EventsubError;
 use super::event::Event;
-use super::{data, outbound};
+use super::outbound;
 use futures_util::StreamExt;
 use std::future::Future;
 use tokio::io::AsyncWriteExt;
@@ -26,7 +26,7 @@ impl EventsubClient {
         data: EventsubClientData,
         options: crate::options::Options,
     ) -> Result<Self, EventsubError> {
-        options.debug("Eventsub: connecting to Twitch");
+        options.debug("Eventsub: Connecting to Twitch");
 
         let websocket = EventsubClient::connect_websocket()
             .await

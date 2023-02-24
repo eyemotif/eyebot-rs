@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 /// Trait is sealed.
 pub trait Event: DeserializeOwned + sealed::Sealed {}

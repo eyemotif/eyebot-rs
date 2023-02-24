@@ -101,6 +101,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             // TODO: add options for port
             let comet_server = eye::comet::Server::new(8000, bot.error_reporter(), options).await?;
 
+            tokio::spawn(eye_store.register_comet_commands(&bot, &comet_server));
+
             tokio::spawn(comet_server.accept_connections());
         }
     }

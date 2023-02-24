@@ -10,10 +10,10 @@ pub struct BotInterface(pub(super) Arc<InterfaceData>);
 
 #[derive(Debug)]
 pub struct InterfaceData {
-    pub helix_auth: HelixAuth,
-    pub chat: ChatInterface,
-    pub error_reporter: tokio::sync::mpsc::Sender<super::error::BotError>,
-    pub message_history: Arc<(Mutex<VecDeque<String>>, usize)>,
+    pub(super) helix_auth: HelixAuth,
+    pub(super) chat: ChatInterface,
+    pub(super) error_reporter: tokio::sync::mpsc::Sender<super::error::BotError>,
+    pub(super) message_history: Arc<(Mutex<VecDeque<String>>, usize)>,
 }
 
 impl BotInterface {

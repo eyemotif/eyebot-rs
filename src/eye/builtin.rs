@@ -1,3 +1,4 @@
+use super::comet;
 use super::command::CommandRules;
 use super::io;
 use super::listener;
@@ -448,20 +449,104 @@ pub fn register_base_commands(
 pub fn register_comet_commands(
     store: &super::Store,
     bot: &crate::bot::Bot,
-    comet_server: &super::comet::Server,
+    comet_server: &comet::Server,
 ) -> impl std::future::Future<Output = ()> + 'static {
     let data = store.0.clone();
     let command_future = bot.on_chat_message_comet(comet_server, move |msg, bot, cmt| {
         let data = data.clone();
-        async move { todo!() }
+        async move {
+            if let Some(arg) = msg.text.strip_prefix("!comet:get") {
+                let component_type = match arg.trim() {
+                    "audio" => comet::component::Type::Audio,
+                    arg => {
+                        bot.reply(&msg, format!("Unknown component type {arg:?}."))
+                            .await;
+                        return;
+                    }
+                };
+
+                let Some(get_response) = cmt
+                    .send_message(comet::Message::GetComponents { component_type })
+                    .await else {
+                        data.read().await.options.debug("Builtin: Comet client disconnected before response");
+                        return; 
+                    };
+
+                match get_response {
+                    comet::ResponseData::Ok => {
+                        unreachable!("Expected data from GetComponents")
+                    }
+                    comet::ResponseData::Data { payload } => bot.reply(&msg, payload).await,
+                    comet::ResponseData::Error {
+                        is_internal,
+                        message,
+                    } => {
+                        bot.reply(
+                            &msg,
+                            format!(
+                                "{}Comet error: {message}",
+                                if is_internal { "Internal " } else { "" }
+                            ),
+                        )
+                        .await;
+                    }
+                }
+            } else if let Some(body) = msg.text.strip_prefix("!comet:play-sound") {
+                let sounds = body
+                    .split([' ', ','])
+                    .map(|word| {
+                        word.split('+')
+                            .map(|sound| comet::component::Sound {
+                                name: String::from(sound),
+                            })
+                            .collect()
+                    })
+                    .collect();
+
+                let Some(play_response) = cmt
+                    .send_message(comet::Message::PlayAudio { data: sounds })
+                    .await else {
+                        data.read().await.options.debug("Builtin: Comet client disconnected before response");
+                        return; 
+                    };
+
+                match play_response {
+                    comet::ResponseData::Ok => (),
+                    comet::ResponseData::Data { payload: _ } => unreachable!(),
+                    comet::ResponseData::Error {
+                        is_internal,
+                        message,
+                    } => {
+                        bot.reply(
+                            &msg,
+                            format!(
+                                "{}Comet error: {message}",
+                                if is_internal { "Internal " } else { "" }
+                            ),
+                        )
+                        .await;
+                    }
+                }
+            } else if msg.text.starts_with("!comet:ping") {
+                bot.reply(
+                    &msg,
+                    if cmt.has_client().await {
+                        "Pong!"
+                    } else {
+                        "No Comet client."
+                    },
+                )
+                .await;
+            }
+        }
     });
 
     let data = store.0.clone();
     async move {
         let mut data = data.write().await;
-        for builtin in [""] {
+        for builtin in ["get", "play-sound"] {
             data.commands.insert(
-                String::from(builtin),
+                String::from(format!("comet:{builtin}")),
                 Arc::new(super::command::CommandRules::empty_builtin(true)),
             );
         }
