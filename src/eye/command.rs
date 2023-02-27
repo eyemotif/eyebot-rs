@@ -15,6 +15,7 @@ pub enum CommandSection {
     ChatterName,
     WordIndex(usize),
     Counter(String),
+    AllWords,
 }
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum CommandTag {
@@ -188,6 +189,7 @@ impl CommandRules {
                 } else {
                     format!("%counter={name}")
                 },
+                CommandSection::AllWords => args.join(" "),
             })
         }
 
@@ -228,6 +230,7 @@ impl CommandRules {
                 CommandSection::ChatterName => String::from("%name"),
                 CommandSection::WordIndex(idx) => format!("%{idx}"),
                 CommandSection::Counter(name) => format!("%counter={name}"),
+                CommandSection::AllWords => String::from("%@"),
             }))
             .collect()
     }
@@ -244,6 +247,7 @@ impl CommandRules {
     fn var_from_string(input: &str) -> Result<CommandSection, RulesError> {
         Ok(match input {
             "name" => CommandSection::ChatterName,
+            "@" => CommandSection::AllWords,
             input => {
                 if let Ok(idx) = input.parse() {
                     CommandSection::WordIndex(idx)
