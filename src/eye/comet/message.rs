@@ -16,6 +16,11 @@ pub enum Message {
     PlayAudio {
         data: Vec<Vec<component::Sound>>,
     },
+    AudioVolume {
+        name: String,
+        value: f32,
+    },
+    AudioClear {},
 }
 
 #[derive(Debug, Serialize)]

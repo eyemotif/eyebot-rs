@@ -532,6 +532,53 @@ pub fn register_comet_commands(
                         .await;
                     }
                 }
+            } else if let Some(body) = msg.text.strip_prefix("!comet:volume") {
+                if let Some((name, value)) = body.trim().split_once(' ') {
+                    if let Ok(value) = value.parse() {
+                        let response = match cmt
+                            .send_message(comet::Message::AudioVolume {
+                                name: String::from(name),
+                                value,
+                            })
+                            .await
+                        {
+                            Some(it) => it,
+                            None => {
+                                data.read()
+                                    .await
+                                    .options
+                                    .debug("Builtin: Comet client disconnected before response");
+                                return;
+                            }
+                        };
+                        match response {
+                            comet::ResponseData::Ok => (),
+                            comet::ResponseData::Data { payload: _ } => unreachable!(),
+                            comet::ResponseData::Error {
+                                is_internal,
+                                message,
+                            } => {
+                                bot.reply(
+                                    &msg,
+                                    format!(
+                                        "{}Comet error: {message}",
+                                        if is_internal { "Internal " } else { "" }
+                                    ),
+                                )
+                                .await;
+                            }
+                        }
+                    } else {
+                        bot.reply(
+                            &msg,
+                            format!("Command \"comet:volume\" expects a number as its 2nd argument, got {value:?}"),
+                        )
+                        .await;
+                    }
+                } else {
+                    bot.reply(&msg, "Command \"comet:volume\" expects 2 arguments")
+                        .await;
+                }
             } else if msg.text.starts_with("!comet:ping") {
                 bot.reply(
                     &msg,
@@ -542,6 +589,34 @@ pub fn register_comet_commands(
                     },
                 )
                 .await;
+            } else if msg.text.starts_with("!comet:clear-audio") {
+                let response = match cmt
+                            .send_message(comet::Message::AudioClear {  })
+                            .await
+                        {
+                            Some(it) => it,
+                            None => {
+                                data.read()
+                                    .await
+                                    .options
+                                    .debug("Builtin: Comet client disconnected before response");
+                                return;
+                            }
+                        };
+                match response {
+                    comet::ResponseData::Ok => (),
+                    comet::ResponseData::Data { .. } => unreachable!(),
+                    comet::ResponseData::Error { is_internal, message } => {
+                        bot.reply(
+                                    &msg,
+                                    format!(
+                                        "{}Comet error: {message}",
+                                        if is_internal { "Internal " } else { "" }
+                                    ),
+                                )
+                                .await;
+                    },
+                }
             }
         }
     });

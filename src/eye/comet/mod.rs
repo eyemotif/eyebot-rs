@@ -249,7 +249,10 @@ impl Server {
 
             let Some(client) = client.upgrade() else { break; };
 
-            options.debug(format!("Comet: Outbound: {:?}", message.message));
+            options.debug(format!(
+                "Comet ({task_name}): Outbound: {:?}",
+                message.message
+            ));
 
             let write_result = client
                 .sender
