@@ -8,12 +8,14 @@ TODO: write readme
   - [counters](#counters)
   - [listeners](#listeners)
   - [disk interactions](#disk-interactions)
+  - [comet](#comet)
 - [options](#options)
   - [features](#features)
     - [eye](#eye-1)
     - [custom\_commands](#custom_commands)
     - [counters](#counters-1)
     - [listeners](#listeners-1)
+    - [comet](#comet-1)
   - [exec](#exec)
     - [debug](#debug)
   - [bot](#bot)
@@ -54,6 +56,7 @@ There are three types of data in a custom command: Text, Variables, and Tags.
   * `%<number>`: The `number`-th argument of the command. If something like
     `!command a b c` is called, `a` is `%0`, `%b` is `%1`, and so on. If the
     argument doesn't exist, the tag will be output as if it were Text.
+  * `%@`: Expands to all args, separated by spaces.
   * `%counter=<counter-name>`: The value of the [counter](#counters) defined by `<counter-name>`. If the
     counter doesn't exist, the tag will be output as if it were Text.
 * **Tags** are metadata that are not output, but tell the command how to execute. 
@@ -61,6 +64,9 @@ There are three types of data in a custom command: Text, Variables, and Tags.
   * `&REPLY`: Replies to the command caller instead of just sending a chat message.
   * `&SUPER`: Prevents non-mods from calling the command.
   * `&TEMP`: Prevents the command from being [saved to disk](#disk-interactions).
+  * `&ALIAS`: Treats the command as if the command caller sent its body instead.
+    I.e., if the body is a `!command`, the original command is an *alias* for the
+    new command.
   * `&C:INC=<counter-name>`: Increments the [counter](#counters) defined by `<counter-name>`.
   * `&C:DEC=<counter-name>`: Decrements the [counter](#counters) defined by `<counter-name>`.
   * `&C:ZERO=<counter-name>`: Sets the value of the [counter](#counters) defined by
@@ -117,6 +123,18 @@ When any [custom commands], [counters], or [listeners] are in some way created,
 edited, or removed, a file on the disk is edited. Where these files are located
 is controlled by the `--store` flag, or `~/.eyebot-store/` by default. 
 
+## comet
+A Comet client can be controlled with certain commands:
+* `!comet:ping`: Replies "Pong!" if a Comet client is connected to the bot, and
+  "No Comet client." if not.
+* `!comet:get <component_type>`: Gets a list of all the components associated
+  with `component_type`. Currently, the only component type is `audio`.
+* `!comet:play-audio <input>`: Plays audio. Separate different sounds by a space
+  and/or comma, and play multiple at the same time with a plus.
+* `!comet:clear-audio`: Clears the audio queue.
+* `!comet:volume <amt>`: Sets all Audio components to the volume of `amt`.
+  Expects a floating point value between `0` and `1` inclusive as its argument.
+
 # options
 
 ## features
@@ -134,16 +152,22 @@ Enable/disable features.
 * default: `true`
 
 ### counters
-* Enables chat-defined counters. 
+* Enables [chat-defined counters](#counters). 
 * *Disabled if `features.eye` is `false`.*
 * type: `bool`
 * default: `true`
   
 ### listeners
-* Enables chat-defined listeners. 
+* Enables [chat-defined listeners](#listeners). 
 * *Disabled if `features.eye` is `false`.*
 * type: `bool`
 * default: `true`
+
+### comet
+* Enables [comet](#comet) functionality.
+* *Disabled if `features.eye` is `false`.*
+* type: `bool`
+* default: `false`
 
 ## exec
 Details about how the console side of the program functions.
