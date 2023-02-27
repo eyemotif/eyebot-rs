@@ -518,7 +518,8 @@ pub fn register_comet_commands(
                     }
                 }
             } else if let Some(body) = msg.text.strip_prefix("!comet:play-audio") {
-                let sounds = super::comet::component::Sound::parse(body);
+                let mut sounds = super::comet::component::Sound::parse(body);
+                sounds.truncate(10);
 
                 let play_response = match cmt
                     .send_message(comet::Message::PlayAudio { data: sounds })
