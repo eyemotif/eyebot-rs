@@ -25,6 +25,7 @@ pub enum CommandTag {
     CountInc(String),
     CountDec(String),
     CountReset(String),
+    Alias,
 }
 #[derive(Debug)]
 pub enum RulesError {
@@ -116,6 +117,7 @@ impl CommandRules {
         enum OutputType {
             Normal,
             Reply,
+            Alias,
         }
         let mut output_type = OutputType::Normal;
 
@@ -156,6 +158,7 @@ impl CommandRules {
                         return;
                     }
                 }
+                CommandTag::Alias => output_type = OutputType::Alias,
             }
         }
 
@@ -193,6 +196,7 @@ impl CommandRules {
         match output_type {
             OutputType::Normal => bot.say(message).await,
             OutputType::Reply => bot.reply(&msg, message).await,
+            OutputType::Alias => bot.mock_message(msg, message),
         }
     }
 
@@ -216,6 +220,7 @@ impl CommandRules {
                 CommandTag::CountInc(name) => Some(format!("&C:INC={name}")),
                 CommandTag::CountDec(name) => Some(format!("&C:DEC={name}")),
                 CommandTag::CountReset(name) => Some(format!("&C:ZERO={name}")),
+                CommandTag::Alias => Some(String::from("&ALIAS")),
             })
             .map(|tag| tag + " ")
             .chain(self.body.iter().map(|sec| match sec {
@@ -255,6 +260,7 @@ impl CommandRules {
             "REPLY" => CommandTag::Reply,
             "SUPER" => CommandTag::Super,
             "TEMP" => CommandTag::Temporary,
+            "ALIAS" => CommandTag::Alias,
             input => {
                 if let Some((tag, val)) = input.split_once('=') {
                     let val = String::from(val);

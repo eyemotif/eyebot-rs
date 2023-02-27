@@ -62,4 +62,7 @@ impl BotInterface {
     pub fn helix_auth(&self) -> &HelixAuth {
         &self.0.helix_auth
     }
+    pub fn mock_message<S: Into<String>>(&self, mock: &crate::chat::data::ChatMessage, text: S) {
+        let _ = self.0.chat.mock_message(mock.clone(), text);
+    }
 }

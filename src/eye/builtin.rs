@@ -16,8 +16,9 @@ pub fn register_base_commands(
     let data_cmn = store.0.clone();
     let data_lis = store.0.clone();
     let data_lse = store.0.clone();
+    let data_als = store.0.clone();
 
-    let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 7] = [
+    let commands: [std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>; 8] = [
         // Mod-only commands
         Box::pin(bot.on_chat_message(move |msg, bot| {
             let _data = data_mod.clone();
@@ -394,6 +395,20 @@ pub fn register_base_commands(
                 }
             }
         })),
+        // aliases
+        Box::pin(bot.on_chat_message(move |msg, bot| {
+            let data = data_als.clone();
+            async move {
+                if msg.text.starts_with("!help") {
+                    bot.mock_message(&msg, "!commands");
+                }
+                if data.read().await.options.features.custom_commands {
+                    if let Some(alias_args) = msg.text.strip_prefix("!cmd:add") {
+                        bot.mock_message(&msg, format!("!cmd:set{alias_args}"))
+                    }
+                }
+            }
+        })),
     ];
 
     let data = store.0.clone();
@@ -455,6 +470,10 @@ pub fn register_comet_commands(
     let command_future = bot.on_chat_message_comet(comet_server, move |msg, bot, cmt| {
         let data = data.clone();
         async move {
+            if !msg.user_is_super() {
+                return;
+            }
+
             if let Some(arg) = msg.text.strip_prefix("!comet:get") {
                 let component_type = match arg.trim() {
                     "audio" => comet::component::Type::Audio,
@@ -621,10 +640,27 @@ pub fn register_comet_commands(
         }
     });
 
+    // aliases
+    let data = store.0.clone();
+    let alias_future = bot.on_chat_message(move |msg, bot| {
+        let _data = data.clone();
+        async move {
+            if msg.text.starts_with("!sounds") {
+                bot.mock_message(
+                    &crate::chat::data::ChatMessage {
+                        is_moderator: true,
+                        ..msg
+                    },
+                    "!comet:get audio",
+                )
+            }
+        }
+    });
+
     let data = store.0.clone();
     async move {
         let mut data = data.write().await;
-        for builtin in ["get", "play-sound"] {
+        for builtin in ["get", "play-audio", "clear-audio", "ping", "volume"] {
             data.commands.insert(
                 String::from(format!("comet:{builtin}")),
                 Arc::new(super::command::CommandRules::empty_builtin(true)),
@@ -632,6 +668,6 @@ pub fn register_comet_commands(
         }
         drop(data);
 
-        command_future.await;
+        tokio::join!(command_future, alias_future);
     }
 }

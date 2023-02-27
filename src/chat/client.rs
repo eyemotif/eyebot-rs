@@ -60,6 +60,7 @@ impl ChatClient {
             }
         }
     }
+
     pub async fn run(self) -> Result<(), ChatClientError> {
         self.handle_auth_messages()
             .await?

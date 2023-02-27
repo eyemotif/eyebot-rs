@@ -44,4 +44,10 @@ impl ChatInterface {
             ),
         })
     }
+    pub fn mock_message<S: Into<String>>(&self, mock: ChatMessage, text: S) {
+        let _ = self.0.message_channel.send(ChatMessage {
+            text: text.into(),
+            ..mock
+        });
+    }
 }
