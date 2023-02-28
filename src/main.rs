@@ -15,7 +15,7 @@ pub mod options;
 pub mod twitch;
 
 #[tokio::main]
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = cli::Cli::parse();
     let tokens_store_path = expand_store_path(args.store);
     let options = if let Some(options_file) = args.options_file {
@@ -84,10 +84,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             bot_username: String::from("eye___bot"),
             chat_channel: String::from("eye_motif"),
             chat_implicit_access: args.chat_access,
-            subscriptions: vec![Subscription::ChannelPointRedeem {
-                broadcaster_user_id: broadcaster_user_id.clone(),
-                reward_id: None,
-            }],
+            subscriptions: vec![
+                Subscription::ChannelPointRedeem {
+                    broadcaster_user_id: broadcaster_user_id.clone(),
+                    reward_id: None,
+                },
+                Subscription::RaidTo {
+                    broadcaster_user_id: broadcaster_user_id.clone(),
+                },
+            ],
         },
         options,
     )
@@ -96,6 +101,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if options.features.eye {
         let eye_store = eye::Store::new(tokens_store_path.clone(), &bot, options).await?;
         tokio::spawn(eye_store.register_base_commands(&bot));
+
+        tokio::spawn(bot.on_event::<event::Raid, _>(|notif, bot| async move {
+            match twitch::stream_from_user_id(
+                &notif.payload.event.from_broadcaster_user_id,
+                bot.helix_auth(),
+            )
+            .await
+            {
+                Ok(Some(stream)) => {
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    bot.say(format!(
+                        "Thank you so much @{} for the raid!!! <3",
+                        stream.user_name
+                    ))
+                    .await;
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    bot.say(format!(
+                        "{} was last playing \"{}\" with {} viewer{}! :D",
+                        stream.user_name,
+                        stream.game_name,
+                        stream.viewer_count,
+                        if stream.viewer_count == 1 { "" } else { "s" }
+                    ))
+                    .await;
+                }
+                Ok(None) => bot.say("Thank you so much for the raid!!! <3").await,
+                Err(err) => {
+                    eprintln!("Error getting a Stream from a user id: {err}");
+                    bot.say("Thank you so much for the raid!!! <3").await;
+                }
+            };
+        }));
 
         if options.features.comet {
             // TODO: add options for port

@@ -3,7 +3,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[derive(Debug)]
 pub struct HelixAuth {
