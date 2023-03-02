@@ -26,6 +26,7 @@ pub struct ChatMessage {
     pub is_subscriber: bool,
     pub emotes: Vec<EmoteInfo>,
     pub display_name: String,
+    pub name_color: Option<String>,
 }
 
 impl ChatMessage {

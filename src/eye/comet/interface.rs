@@ -1,4 +1,6 @@
+use super::feature::Feature;
 use super::message::{Message, MessageTag, TaggedMessage};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex, RwLock};
 
@@ -8,6 +10,7 @@ pub struct CometInterface(Arc<Mutex<InterfaceData>>);
 #[derive(Debug)]
 struct InterfaceData {
     pub state: Arc<RwLock<Option<String>>>,
+    features: Option<HashSet<Feature>>,
     message_sender: Option<mpsc::Sender<TaggedMessage>>,
     response_receiver: Option<watch::Receiver<super::message::Response>>,
 }
@@ -21,6 +24,7 @@ impl CometInterface {
             message_sender: Some(message_sender),
             response_receiver: Some(response_receiver),
             state: Arc::new(RwLock::new(None)),
+            features: None,
         })))
     }
 
@@ -95,5 +99,14 @@ impl CometInterface {
         interface.response_receiver.take().map(|receiver| receiver);
         *interface.state.write().await = None;
         *self.0.lock().await.state.write().await = None;
+    }
+
+    pub(super) async fn get_features_mut(
+        &self,
+    ) -> tokio::sync::MappedMutexGuard<'_, Option<HashSet<Feature>>> {
+        tokio::sync::MutexGuard::map(self.0.lock().await, |inner| &mut inner.features)
+    }
+    pub async fn get_features(&self) -> Option<HashSet<Feature>> {
+        self.0.lock().await.features.clone()
     }
 }

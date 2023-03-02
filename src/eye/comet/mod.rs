@@ -6,6 +6,7 @@ use tokio_tungstenite::tungstenite::error::ProtocolError;
 use tokio_tungstenite::tungstenite::{Error as SocketError, Message as SocketMessage};
 
 pub mod component;
+pub mod feature;
 mod interface;
 mod message;
 
@@ -21,6 +22,7 @@ pub struct Server {
     response_sender: Arc<watch::Sender<message::Response>>,
     interface: CometInterface,
     options: crate::options::Options,
+    streamer_username: String,
 }
 
 #[derive(Debug)]
@@ -50,8 +52,9 @@ macro_rules! close_err {
 }
 
 impl Server {
-    pub async fn new(
+    pub async fn new<S: Into<String>>(
         port: u16,
+        streamer_username: S,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         options: crate::options::Options,
     ) -> std::io::Result<Self> {
@@ -75,6 +78,7 @@ impl Server {
             message_receiver: Arc::new(Mutex::new(message_receiver)),
             response_sender: Arc::new(response_sender),
             options,
+            streamer_username: streamer_username.into(),
         })
     }
 
@@ -167,6 +171,32 @@ impl Server {
                 state,
                 close_sender,
             });
+
+            let features = feature::Feature::get_features(self.interface.clone())
+                .await
+                .expect("Client should be connected");
+            match feature::Feature::init(
+                self.interface.clone(),
+                features,
+                self.streamer_username.clone(),
+            )
+            .await
+            .expect("Client should be connected")
+            {
+                Ok(()) => self.options.debug(format!(
+                    "Comet ({}): Initialized client",
+                    client.short_state()
+                )),
+                Err(err) => {
+                    let _ = self
+                        .error_reporter
+                        .send(crate::bot::error::BotError::Custom(format!(
+                            "Error on initializing comet websocket connection: {err}"
+                        )))
+                        .await;
+                    break;
+                }
+            }
 
             tokio::spawn(Server::handle_client(
                 Arc::downgrade(&client),

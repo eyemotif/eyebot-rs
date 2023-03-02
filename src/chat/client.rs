@@ -107,6 +107,7 @@ impl ChatClient {
                         is_subscriber: tags.subscriber,
                         emotes: tags.emotes,
                         display_name: tags.display_name,
+                        name_color: tags.color,
                     };
 
                     self.options.debug(format!(

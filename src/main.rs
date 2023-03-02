@@ -136,7 +136,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         if options.features.comet {
             // TODO: add options for port
-            let comet_server = eye::comet::Server::new(8000, bot.error_reporter(), options).await?;
+            let comet_server =
+                eye::comet::Server::new(8000, "eye_motif", bot.error_reporter(), options).await?;
 
             tokio::spawn(eye_store.register_comet_commands(&bot, &comet_server));
 
@@ -170,6 +171,61 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     }
                 },
             ));
+
+            tokio::spawn(
+                bot.on_chat_message_comet(&comet_server, |msg, bot, cmt| async move {
+                    match cmt.get_features().await {
+                        Some(features)
+                            if features.contains(&eye::comet::feature::Feature::Chat) =>
+                        {
+                            ()
+                        }
+                        _ => return,
+                    }
+
+                    let chat = eye::comet::component::Chat::from_chat_message(&msg);
+                    loop {
+                        match cmt
+                            .send_message(eye::comet::Message::Chat {
+                                user_id: msg.user_id.clone(),
+                                chat: chat.clone(),
+                            })
+                            .await
+                        {
+                            Some(response) => match response {
+                                eye::comet::ResponseData::Ok => break,
+                                eye::comet::ResponseData::Data { payload } => {
+                                    match cmt.send_message(eye::comet::Message::ChatUser {
+                                        user_id: msg.user_id.clone(),
+                                        chat_info: eye::comet::component::ChatterInfo {
+                                            display_name: msg.display_name.clone(),
+
+                                            name_color: msg.,
+
+                                            badges: Vec < String,
+                                        },
+                                    }) {}
+                                }
+                                eye::comet::ResponseData::Error {
+                                    is_internal,
+                                    message,
+                                } => {
+                                    let _ = bot
+                                        .error(
+                                            format!(
+                                                "{}Error sending a chat message to comet client: ",
+                                                if is_internal { "Internal " } else { "" }
+                                            ) + &message,
+                                        )
+                                        .await;
+                                    return;
+                                }
+                            },
+                            None => break,
+                        }
+                    }
+                }),
+            );
 
             tokio::spawn(comet_server.accept_connections());
         }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::auth::access::AccessTokenManager;
 use reqwest::Client;
 use serde::Deserialize;
@@ -63,6 +65,20 @@ pub struct TwitchStream {
     pub is_mature: bool,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TwitchBadgeUrls {
+    pub id: String,
+    pub image_url_1x: String,
+    pub image_url_2x: String,
+    pub image_url_4x: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct BadgesResponse {
+    pub set_id: String,
+    pub versions: Vec<TwitchBadgeUrls>,
+}
+
 pub fn from_twitch_response<T: serde::de::DeserializeOwned>(twitch_response: &str) -> Result<T> {
     if let Ok(error) = serde_json::from_str::<TwitchError>(twitch_response) {
         Err(error.into())
@@ -96,10 +112,39 @@ pub async fn stream_from_user_id(user_id: &str, auth: &HelixAuth) -> Result<Opti
     .await
 }
 
-async fn get_paginated_value<T: serde::de::DeserializeOwned, U: reqwest::IntoUrl>(
+pub async fn get_global_badges(auth: &HelixAuth) -> Result<HashMap<String, Vec<TwitchBadgeUrls>>> {
+    Ok(
+        get_paginated_values("https://api.twitch.tv/helix/chat/badges/global", auth)
+            .await?
+            .into_iter()
+            .map(|value| serde_json::from_value::<BadgesResponse>(value))
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|response| (response.set_id, response.versions))
+            .collect(),
+    )
+}
+pub async fn get_channel_badges(
+    broadcaster_id: &str,
+    auth: &HelixAuth,
+) -> Result<HashMap<String, Vec<TwitchBadgeUrls>>> {
+    Ok(get_paginated_values(
+        format!("https://api.twitch.tv/helix/chat/badges?broadcaster_id={broadcaster_id}"),
+        auth,
+    )
+    .await?
+    .into_iter()
+    .map(|value| serde_json::from_value::<BadgesResponse>(value))
+    .collect::<std::result::Result<Vec<_>, _>>()?
+    .into_iter()
+    .map(|response| (response.set_id, response.versions))
+    .collect())
+}
+
+async fn get_paginated_values<U: reqwest::IntoUrl>(
     url: U,
     auth: &HelixAuth,
-) -> Result<Option<T>> {
+) -> Result<Vec<serde_json::Value>> {
     let response = Client::new()
         .get(url)
         .header("Client-Id", &auth.client_id)
@@ -116,17 +161,25 @@ async fn get_paginated_value<T: serde::de::DeserializeOwned, U: reqwest::IntoUrl
         .await?;
 
     let json = from_twitch_response::<Value>(&response)?;
-    let maybe_user = json
+    Ok(json
         .as_object()
         .ok_or("Expected object")?
         .get("data")
         .ok_or("Expected field data")?
         .as_array()
         .ok_or("Expected array")?
-        .get(0);
+        .clone())
+}
 
-    Ok(maybe_user
-        .map(|user| serde_json::from_value(user.clone()))
+async fn get_paginated_value<T: serde::de::DeserializeOwned, U: reqwest::IntoUrl>(
+    url: U,
+    auth: &HelixAuth,
+) -> Result<Option<T>> {
+    let arr = get_paginated_values(url, auth).await?;
+
+    Ok(arr
+        .get(0)
+        .map(|value| serde_json::from_value(value.clone()))
         .transpose()?)
 }
 
