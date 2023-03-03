@@ -1,4 +1,4 @@
-use super::data::{ChatAccess, ChatMessage};
+use super::data::{ChatAccess, ChatEvent, ChatMessage};
 use super::error::ChatClientError;
 use super::interface::ChatInterface;
 use crate::chat::tag;
@@ -8,6 +8,7 @@ use irc::proto::{Command, Response};
 use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
+use tokio::sync::watch;
 
 #[derive(Debug)]
 pub struct ChatClient {
@@ -17,6 +18,7 @@ pub struct ChatClient {
     joined_users: HashSet<String>,
     interface: super::interface::ChatInterface,
     options: crate::options::Options,
+    event_sender: watch::Sender<ChatEvent>,
 }
 
 impl ChatClient {
@@ -40,6 +42,7 @@ impl ChatClient {
         Ok(ChatClient {
             joined_users: HashSet::new(),
             interface: ChatInterface::new(client.clone(), data.chat_channel.clone()),
+            event_sender: watch::channel(ChatEvent::ClearChat).0,
             data,
             stream,
             client,
@@ -77,8 +80,12 @@ impl ChatClient {
         self.interface.clone()
     }
     #[must_use]
-    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<ChatMessage> {
+    pub fn subscribe(&self) -> watch::Receiver<ChatMessage> {
         self.interface.0.message_channel.subscribe()
+    }
+    #[must_use]
+    pub fn subscribe_events(&self) -> watch::Receiver<ChatEvent> {
+        self.event_sender.subscribe()
     }
 
     async fn handle_chat_messages(mut self) -> Result<(), ChatClientError> {
@@ -143,7 +150,21 @@ impl ChatClient {
                                 &message.tags.expect("Message always has tags"),
                             )
                             .expect("Tags are always well formed");
-                            println!("{tags:?}");
+
+                            let _ = self.event_sender.send(
+                                if let Some(user_id) = tags.target_user_id {
+                                    if let Some(timeout_seconds) = tags.ban_duration {
+                                        ChatEvent::UserTimeout {
+                                            user_id,
+                                            timeout_seconds,
+                                        }
+                                    } else {
+                                        ChatEvent::UserBan { user_id }
+                                    }
+                                } else {
+                                    ChatEvent::ClearChat
+                                },
+                            );
                         }
                         "CLEARMSG" => {
                             let tags = tag::tags::<tag::CLEARMSGTags>(
@@ -151,6 +172,7 @@ impl ChatClient {
                             )
                             .expect("Tags are always well formed");
                             println!("{tags:?}");
+                            // TODO: send chatevent here
                         }
                         "HOSTTARGET" => todo!(),
                         "RECONNECT" => todo!(),

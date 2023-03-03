@@ -61,8 +61,8 @@ impl Server {
         let server = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
 
         options.debug(format!(
-            "Comet: Bound server to {}",
-            server.local_addr().expect("Address should be set")
+            "Comet: Bound server to port {}",
+            server.local_addr().expect("Address should be set").port()
         ));
 
         // TODO: remove magic number

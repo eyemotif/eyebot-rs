@@ -101,6 +101,20 @@ impl Bot {
             }
         }
     }
+    pub fn on_chat_event<Fut: Future>(
+        &self,
+        mut f: impl FnMut(crate::chat::data::ChatEvent, interface::BotInterface) -> Fut,
+    ) -> impl Future<Output = ()> {
+        let interface = self.interface.0.clone();
+        let mut receiver = self.chat_client.subscribe_events();
+
+        async move {
+            while receiver.changed().await.is_ok() {
+                let chat_event = receiver.borrow().clone();
+                f(chat_event, interface::BotInterface(interface.clone())).await;
+            }
+        }
+    }
     pub fn on_chat_message_comet<Fut: Future>(
         &self,
         comet_server: &crate::eye::comet::Server,
@@ -150,6 +164,31 @@ impl Bot {
                     )
                     .await;
                 }
+            }
+        }
+    }
+    pub fn on_chat_event_comet<Fut: Future>(
+        &self,
+        comet_server: &crate::eye::comet::Server,
+        mut f: impl FnMut(
+            crate::chat::data::ChatEvent,
+            interface::BotInterface,
+            crate::eye::comet::CometInterface,
+        ) -> Fut,
+    ) -> impl Future<Output = ()> {
+        let interface = self.interface.0.clone();
+        let mut receiver = self.chat_client.subscribe_events();
+        let comet = comet_server.interface();
+
+        async move {
+            while receiver.changed().await.is_ok() {
+                let chat_event = receiver.borrow().clone();
+                f(
+                    chat_event,
+                    interface::BotInterface(interface.clone()),
+                    comet.clone(),
+                )
+                .await;
             }
         }
     }

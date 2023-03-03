@@ -29,6 +29,18 @@ pub struct ChatMessage {
     pub badges: std::collections::HashMap<String, String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ChatEvent {
+    ClearChat,
+    UserBan {
+        user_id: String,
+    },
+    UserTimeout {
+        user_id: String,
+        timeout_seconds: u64,
+    },
+}
+
 impl ChatMessage {
     #[must_use]
     pub fn user_is_broadcaster(&self) -> bool {
