@@ -174,6 +174,7 @@ impl Tags for PRIVMSGTags {
         let badges = badges
             .expect("Tag always has a value")
             .split(',')
+            .filter(|s| !s.is_empty())
             .map(|badge| {
                 badge
                     .split_once('/')

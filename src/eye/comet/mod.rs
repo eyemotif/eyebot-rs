@@ -55,9 +55,12 @@ impl Server {
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         options: crate::options::Options,
     ) -> std::io::Result<Self> {
-        let server = tokio::net::TcpListener::bind(format!("localhost:{port}")).await?;
+        let server = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
 
-        options.debug(format!("Comet: Bound server to ws://localhost:{port}"));
+        options.debug(format!(
+            "Comet: Bound server to {}",
+            server.local_addr().expect("Address should be set")
+        ));
 
         // TODO: remove magic number
         let (message_sender, message_receiver) = mpsc::channel(16);
