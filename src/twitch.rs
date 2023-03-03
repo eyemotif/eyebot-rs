@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-
 use crate::auth::access::AccessTokenManager;
 use reqwest::Client;
+use ring::rand::SecureRandom;
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -150,6 +150,20 @@ pub async fn get_all_badges(
         get_channel_badges(broadcaster_id, auth),
     )?;
     Ok(global.into_iter().chain(channel.into_iter()).collect())
+}
+
+pub fn random_chatter_color() -> String {
+    lazy_static::lazy_static!(
+        static ref RNG: ring::rand::SystemRandom = ring::rand::SystemRandom::new();
+    );
+    let mut color = [0u8; 3];
+    loop {
+        match RNG.fill(&mut color) {
+            Ok(()) => break,
+            Err(_) => (),
+        }
+    }
+    format!("#{:02X}{:02X}{:02X}", color[0], color[1], color[2])
 }
 
 async fn get_paginated_values<U: reqwest::IntoUrl>(

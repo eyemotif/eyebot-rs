@@ -201,6 +201,7 @@ fn run_comet_chat_manager(
         bot.on_chat_message_comet(comet_server, move |msg, bot, cmt| {
             let broadcaster_user_id = broadcaster_user_id.clone();
             async move {
+                println!("features: {:?}", cmt.get_features().await);
                 match cmt.get_features().await {
                     Some(features) if features.contains(&eye::comet::feature::Feature::Chat) => (),
                     _ => return,
@@ -238,7 +239,9 @@ fn run_comet_chat_manager(
                                         user_id: msg.user_id.clone(),
                                         chat_info: eye::comet::component::ChatterInfo {
                                             display_name: msg.display_name.clone(),
-                                            name_color: msg.name_color.clone(),
+                                            name_color: msg.name_color.clone().unwrap_or_else(
+                                                || crate::twitch::random_chatter_color(),
+                                            ),
                                             badges: badges
                                                 .into_iter()
                                                 .map(|badges| badges.image_url_4x)

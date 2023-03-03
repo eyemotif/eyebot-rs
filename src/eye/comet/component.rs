@@ -17,14 +17,14 @@ pub struct Sound {
 #[serde(tag = "type")]
 pub enum Chat {
     Text { content: String },
-    Emote { url: String },
+    Emote { emote: String },
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatterInfo {
     pub display_name: String,
-    pub name_color: Option<String>,
+    pub name_color: String,
     pub badges: Vec<String>,
 }
 
@@ -65,7 +65,7 @@ impl Chat {
                                 current_chat = String::new();
                             }
                             output.push(Chat::Emote {
-                                url: emote.id.clone(),
+                                emote: emote.id.clone(),
                             });
                         }
 

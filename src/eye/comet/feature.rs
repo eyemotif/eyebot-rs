@@ -27,7 +27,7 @@ impl Feature {
         features: HashSet<Feature>,
         streamer_username: String,
     ) -> Option<Result<(), String>> {
-        for feature in features {
+        for feature in &features {
             match feature {
                 Feature::Chat => match interface
                     .send_message(Message::ChatSetEmotes {
@@ -41,6 +41,8 @@ impl Feature {
                 },
             }
         }
+
+        *interface.get_features_mut().await = Some(features);
 
         Some(Ok(()))
     }

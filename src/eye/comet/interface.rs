@@ -112,11 +112,11 @@ impl CometInterface {
         *interface.state.write().await = None;
     }
 
-    // pub(super) async fn get_features_mut(
-    //     &self,
-    // ) -> tokio::sync::MappedMutexGuard<'_, Option<HashSet<Feature>>> {
-    //     tokio::sync::MutexGuard::map(self.0.lock().await, |inner| &mut inner.features)
-    // }
+    pub(super) async fn get_features_mut(
+        &self,
+    ) -> tokio::sync::RwLockMappedWriteGuard<'_, Option<HashSet<Feature>>> {
+        tokio::sync::RwLockWriteGuard::map(self.0.write().await, |inner| &mut inner.features)
+    }
     pub async fn get_features(&self) -> Option<HashSet<Feature>> {
         self.0.read().await.features.clone()
     }
