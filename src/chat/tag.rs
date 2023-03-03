@@ -38,6 +38,7 @@ pub struct PRIVMSGTags {
     pub subscriber: bool,
     pub vip: bool,
     pub emotes: Vec<EmoteInfo>,
+    pub color: Option<String>,
 }
 
 #[derive(Debug)]
@@ -168,7 +169,7 @@ impl Tags for PRIVMSGTags {
     fn from_tags(
         mut tags: HashMap<String, Option<String>>,
     ) -> Option<(Self, HashMap<String, Option<String>>)> {
-        let (Some(id), Some(user_id), Some(display_name), Some(badges), bits, Some(is_mod), Some(subscriber), vip, emotes) = (tags.remove("id"), tags.remove("user-id"), tags.remove("display-name"), tags.remove("badges"), tags.remove("bits"), tags.remove("mod"), tags.remove("subscriber"), tags.remove("vip"), tags.remove("emotes")) else {
+        let (Some(id), Some(user_id), Some(display_name), Some(badges), bits, Some(is_mod), Some(subscriber), vip, emotes, color) = (tags.remove("id"), tags.remove("user-id"), tags.remove("display-name"), tags.remove("badges"), tags.remove("bits"), tags.remove("mod"), tags.remove("subscriber"), tags.remove("vip"), tags.remove("emotes"), tags.remove("color")) else {
             return None;
         };
         let badges = badges
@@ -197,6 +198,7 @@ impl Tags for PRIVMSGTags {
                 subscriber: subscriber.expect("Tag always has a value") == "1",
                 vip: vip.is_some(),
                 emotes: emote_tag_to_emotes(emotes),
+                color: color.map(|tag| tag.expect("Tag always has a value")),
             },
             tags,
         ))

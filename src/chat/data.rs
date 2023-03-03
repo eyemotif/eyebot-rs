@@ -21,17 +21,22 @@ pub struct ChatMessage {
     pub channel: String,
     pub text: String,
     pub user_id: String,
-    pub is_broadcaster: bool,
     pub is_moderator: bool,
     pub is_subscriber: bool,
     pub emotes: Vec<EmoteInfo>,
     pub display_name: String,
+    pub name_color: Option<String>,
+    pub badges: std::collections::HashMap<String, String>,
 }
 
 impl ChatMessage {
     #[must_use]
+    pub fn user_is_broadcaster(&self) -> bool {
+        self.badges.contains_key("broadcaster")
+    }
+    #[must_use]
     pub fn user_is_super(&self) -> bool {
-        self.is_broadcaster || self.is_moderator
+        self.is_moderator || self.user_is_broadcaster()
     }
     #[must_use]
     pub fn strip_emotes(&self) -> String {
@@ -47,6 +52,19 @@ impl ChatMessage {
             .char_indices()
             .filter_map(|(loc, chr)| (!emote_locations.contains(&(loc as u16))).then_some(chr))
             .collect()
+    }
+
+    pub async fn get_badges(
+        &self,
+        broadcaster_id: &str,
+        auth: &crate::twitch::HelixAuth,
+    ) -> Result<Vec<crate::twitch::TwitchBadgeUrls>, Box<dyn std::error::Error + Send + Sync>> {
+        let badges = crate::twitch::get_all_badges(broadcaster_id, auth).await?;
+        Ok(badges
+            .into_iter()
+            .filter_map(|(name, badges)| self.badges.get(&name).map(|version| (version, badges)))
+            .filter_map(|(version, badges)| badges.into_iter().find(|urls| version == &urls.id))
+            .collect())
     }
 }
 

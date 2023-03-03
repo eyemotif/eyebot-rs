@@ -6,6 +6,7 @@ use tokio_tungstenite::tungstenite::error::ProtocolError;
 use tokio_tungstenite::tungstenite::{Error as SocketError, Message as SocketMessage};
 
 pub mod component;
+pub mod feature;
 mod interface;
 mod message;
 
@@ -21,6 +22,7 @@ pub struct Server {
     response_sender: Arc<watch::Sender<message::Response>>,
     interface: CometInterface,
     options: crate::options::Options,
+    streamer_username: String,
 }
 
 #[derive(Debug)]
@@ -50,8 +52,9 @@ macro_rules! close_err {
 }
 
 impl Server {
-    pub async fn new(
+    pub async fn new<S: Into<String>>(
         port: u16,
+        streamer_username: S,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         options: crate::options::Options,
     ) -> std::io::Result<Self> {
@@ -78,6 +81,7 @@ impl Server {
             message_receiver: Arc::new(Mutex::new(message_receiver)),
             response_sender: Arc::new(response_sender),
             options,
+            streamer_username: streamer_username.into(),
         })
     }
 
@@ -180,6 +184,7 @@ impl Server {
                 close_receiver,
                 self.interface.clone(),
                 self.options,
+                self.streamer_username.clone(),
             ));
 
             match self.client.replace(client) {
@@ -209,6 +214,7 @@ impl Server {
         close_receiver: mpsc::Receiver<()>,
         interface: CometInterface,
         options: crate::options::Options,
+        streamer_username: String,
     ) {
         tokio::join!(
             Server::client_ping(client.clone(), &task_name, error_reporter.clone(), options),
@@ -226,9 +232,18 @@ impl Server {
                 message_receiver,
                 close_receiver,
                 options
-            )
+            ),
+            Server::client_features(
+                client.clone(),
+                &task_name,
+                error_reporter.clone(),
+                options,
+                interface.clone(),
+                streamer_username,
+            ),
         );
 
+        //FIXME: deadlock occurs here
         interface.set_disconnected().await;
         options.debug(format!("Comet ({task_name}): Client disconnected!"))
     }
@@ -440,6 +455,42 @@ impl Server {
         }
 
         options.debug(format!("Comet ({task_name}): Ping task closed"));
+    }
+
+    async fn client_features(
+        client: Weak<Client>,
+        task_name: &str,
+        error_reporter: mpsc::Sender<crate::bot::error::BotError>,
+        options: crate::options::Options,
+        interface: CometInterface,
+        streamer_username: String,
+    ) {
+        let Some(client) = client.upgrade() else { return };
+
+        let Some(features) = feature::Feature::get_features(interface.clone())
+            .await else { return };
+
+        match feature::Feature::init(interface.clone(), features.clone(), streamer_username)
+            .await
+            .expect("Client should be connected")
+        {
+            Ok(()) => options.debug(format!(
+                "Comet ({}): Initialized client",
+                client.short_state()
+            )),
+            Err(err) => {
+                let _ = error_reporter
+                    .send(crate::bot::error::BotError::Custom(format!(
+                        "Error on initializing comet websocket connection: {err}"
+                    )))
+                    .await;
+                return;
+            }
+        }
+
+        options.debug(format!(
+            "Comet ({task_name}): Initialized features {features:?}"
+        ))
     }
 
     fn create_state() -> Result<String, ring::error::Unspecified> {

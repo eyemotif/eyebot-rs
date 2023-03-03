@@ -136,7 +136,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         if options.features.comet {
             // TODO: add options for port
-            let comet_server = eye::comet::Server::new(8000, bot.error_reporter(), options).await?;
+            let comet_server =
+                eye::comet::Server::new(8000, "eye_motif", bot.error_reporter(), options).await?;
 
             tokio::spawn(eye_store.register_comet_commands(&bot, &comet_server));
 
@@ -171,6 +172,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 },
             ));
 
+            run_comet_chat_manager(&bot, &comet_server, broadcaster_user_id.clone());
+
             tokio::spawn(comet_server.accept_connections());
         }
     }
@@ -187,6 +190,108 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     bot.run().await?;
 
     Ok(())
+}
+
+fn run_comet_chat_manager(
+    bot: &bot::Bot,
+    comet_server: &eye::comet::Server,
+    broadcaster_user_id: String,
+) {
+    tokio::spawn(
+        bot.on_chat_message_comet(comet_server, move |msg, bot, cmt| {
+            let broadcaster_user_id = broadcaster_user_id.clone();
+            async move {
+                println!("features: {:?}", cmt.get_features().await);
+                match cmt.get_features().await {
+                    Some(features) if features.contains(&eye::comet::feature::Feature::Chat) => (),
+                    _ => return,
+                }
+
+                let chat = eye::comet::component::Chat::from_chat_message(&msg);
+                loop {
+                    match cmt
+                        .send_message(eye::comet::Message::Chat {
+                            user_id: msg.user_id.clone(),
+                            chat: chat.clone(),
+                        })
+                        .await
+                    {
+                        Some(response) => match response {
+                            eye::comet::ResponseData::Ok => break,
+                            eye::comet::ResponseData::Data { .. } => {
+                                let badges = match msg
+                                    .get_badges(&broadcaster_user_id.clone(), bot.helix_auth())
+                                    .await
+                                {
+                                    Ok(it) => it,
+                                    Err(err) => {
+                                        let _ = bot
+                                            .error(format!(
+                                                "Error getting a chat message's badges: {err}",
+                                            ))
+                                            .await;
+                                        return;
+                                    }
+                                };
+
+                                match cmt
+                                    .send_message(eye::comet::Message::ChatUser {
+                                        user_id: msg.user_id.clone(),
+                                        chat_info: eye::comet::component::ChatterInfo {
+                                            display_name: msg.display_name.clone(),
+                                            name_color: msg.name_color.clone().unwrap_or_else(
+                                                || crate::twitch::random_chatter_color(),
+                                            ),
+                                            badges: badges
+                                                .into_iter()
+                                                .map(|badges| badges.image_url_4x)
+                                                .collect(),
+                                        },
+                                    })
+                                    .await
+                                {
+                                    Some(eye::comet::ResponseData::Ok) => (),
+                                    Some(eye::comet::ResponseData::Data { .. }) => {
+                                        unreachable!()
+                                    }
+                                    Some(eye::comet::ResponseData::Error {
+                                        is_internal,
+                                        message,
+                                    }) => {
+                                        let _ = bot
+                                            .error(
+                                                format!(
+                                                "{}Error sending a chat message to comet client: ",
+                                                if is_internal { "Internal " } else { "" }
+                                            ) + &message,
+                                            )
+                                            .await;
+                                        return;
+                                    }
+                                    None => break,
+                                }
+                            }
+                            eye::comet::ResponseData::Error {
+                                is_internal,
+                                message,
+                            } => {
+                                let _ = bot
+                                    .error(
+                                        format!(
+                                            "{}Error sending a chat message to comet client: ",
+                                            if is_internal { "Internal " } else { "" }
+                                        ) + &message,
+                                    )
+                                    .await;
+                                return;
+                            }
+                        },
+                        None => break,
+                    }
+                }
+            }
+        }),
+    );
 }
 
 async fn run_oauth_server(

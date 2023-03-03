@@ -21,6 +21,18 @@ pub enum Message {
         value: f32,
     },
     AudioClear {},
+    ChatSetEmotes {
+        username: String,
+    },
+    Chat {
+        user_id: String,
+        chat: Vec<component::Chat>,
+    },
+    ChatUser {
+        user_id: String,
+        chat_info: component::ChatterInfo,
+    },
+    Features {},
 }
 
 #[derive(Debug, Serialize)]
