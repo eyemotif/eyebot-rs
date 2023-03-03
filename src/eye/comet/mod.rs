@@ -172,32 +172,6 @@ impl Server {
                 close_sender,
             });
 
-            let features = feature::Feature::get_features(self.interface.clone())
-                .await
-                .expect("Client should be connected");
-            match feature::Feature::init(
-                self.interface.clone(),
-                features,
-                self.streamer_username.clone(),
-            )
-            .await
-            .expect("Client should be connected")
-            {
-                Ok(()) => self.options.debug(format!(
-                    "Comet ({}): Initialized client",
-                    client.short_state()
-                )),
-                Err(err) => {
-                    let _ = self
-                        .error_reporter
-                        .send(crate::bot::error::BotError::Custom(format!(
-                            "Error on initializing comet websocket connection: {err}"
-                        )))
-                        .await;
-                    break;
-                }
-            }
-
             tokio::spawn(Server::handle_client(
                 Arc::downgrade(&client),
                 client.short_state(),
@@ -207,6 +181,7 @@ impl Server {
                 close_receiver,
                 self.interface.clone(),
                 self.options,
+                self.streamer_username.clone(),
             ));
 
             match self.client.replace(client) {
@@ -236,6 +211,7 @@ impl Server {
         close_receiver: mpsc::Receiver<()>,
         interface: CometInterface,
         options: crate::options::Options,
+        streamer_username: String,
     ) {
         tokio::join!(
             Server::client_ping(client.clone(), &task_name, error_reporter.clone(), options),
@@ -253,9 +229,18 @@ impl Server {
                 message_receiver,
                 close_receiver,
                 options
-            )
+            ),
+            Server::client_features(
+                client.clone(),
+                &task_name,
+                error_reporter.clone(),
+                options,
+                interface.clone(),
+                streamer_username,
+            ),
         );
 
+        //FIXME: deadlock occurs here
         interface.set_disconnected().await;
         options.debug(format!("Comet ({task_name}): Client disconnected!"))
     }
@@ -467,6 +452,42 @@ impl Server {
         }
 
         options.debug(format!("Comet ({task_name}): Ping task closed"));
+    }
+
+    async fn client_features(
+        client: Weak<Client>,
+        task_name: &str,
+        error_reporter: mpsc::Sender<crate::bot::error::BotError>,
+        options: crate::options::Options,
+        interface: CometInterface,
+        streamer_username: String,
+    ) {
+        let Some(client) = client.upgrade() else { return };
+
+        let Some(features) = feature::Feature::get_features(interface.clone())
+            .await else { return };
+
+        match feature::Feature::init(interface.clone(), features.clone(), streamer_username)
+            .await
+            .expect("Client should be connected")
+        {
+            Ok(()) => options.debug(format!(
+                "Comet ({}): Initialized client",
+                client.short_state()
+            )),
+            Err(err) => {
+                let _ = error_reporter
+                    .send(crate::bot::error::BotError::Custom(format!(
+                        "Error on initializing comet websocket connection: {err}"
+                    )))
+                    .await;
+                return;
+            }
+        }
+
+        options.debug(format!(
+            "Comet ({task_name}): Initialized features {features:?}"
+        ))
     }
 
     fn create_state() -> Result<String, ring::error::Unspecified> {

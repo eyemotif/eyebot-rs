@@ -141,6 +141,17 @@ pub async fn get_channel_badges(
     .collect())
 }
 
+pub async fn get_all_badges(
+    broadcaster_id: &str,
+    auth: &HelixAuth,
+) -> Result<HashMap<String, Vec<TwitchBadgeUrls>>> {
+    let (global, channel) = tokio::try_join!(
+        get_global_badges(auth),
+        get_channel_badges(broadcaster_id, auth),
+    )?;
+    Ok(global.into_iter().chain(channel.into_iter()).collect())
+}
+
 async fn get_paginated_values<U: reqwest::IntoUrl>(
     url: U,
     auth: &HelixAuth,

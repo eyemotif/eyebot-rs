@@ -98,11 +98,11 @@ impl ChatClient {
 
                     // TODO: stop sending on error
                     let chat_message = ChatMessage {
+                        badges: tags.badges,
                         id: tags.id,
                         channel: self.data.chat_channel.clone(),
                         text,
                         user_id: tags.user_id,
-                        is_broadcaster: tags.badges.contains_key("broadcaster"),
                         is_moderator: tags.is_mod,
                         is_subscriber: tags.subscriber,
                         emotes: tags.emotes,

@@ -24,7 +24,7 @@ pub enum Chat {
 #[serde(rename_all = "camelCase")]
 pub struct ChatterInfo {
     pub display_name: String,
-    pub name_color: String,
+    pub name_color: Option<String>,
     pub badges: Vec<String>,
 }
 
