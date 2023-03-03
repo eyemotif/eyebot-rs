@@ -33,6 +33,9 @@ pub enum Message {
         chat_info: component::ChatterInfo,
     },
     Features {},
+    ChatClear {
+        user_id: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize)]

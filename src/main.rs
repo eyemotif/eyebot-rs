@@ -292,6 +292,43 @@ fn run_comet_chat_manager(
             }
         }),
     );
+
+    tokio::spawn(
+        bot.on_chat_event_comet(comet_server, |evt, bot, cmt| async move {
+            let outbound = match evt {
+                chat::data::ChatEvent::ClearChat => {
+                    eye::comet::Message::ChatClear { user_id: None }
+                }
+                chat::data::ChatEvent::UserBan { user_id }
+                | chat::data::ChatEvent::UserTimeout { user_id, .. } => {
+                    eye::comet::Message::ChatClear {
+                        user_id: Some(user_id),
+                    }
+                }
+            };
+
+            match cmt.send_message(outbound).await {
+                Some(eye::comet::ResponseData::Ok) => (),
+                Some(eye::comet::ResponseData::Data { .. }) => {
+                    unreachable!()
+                }
+                Some(eye::comet::ResponseData::Error {
+                    is_internal,
+                    message,
+                }) => {
+                    let _ = bot
+                        .error(
+                            format!(
+                                "{}Error sending a chat message to comet client: ",
+                                if is_internal { "Internal " } else { "" }
+                            ) + &message,
+                        )
+                        .await;
+                }
+                None => (),
+            }
+        }),
+    );
 }
 
 async fn run_oauth_server(
