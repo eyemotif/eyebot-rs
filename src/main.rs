@@ -92,6 +92,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 Subscription::RaidTo {
                     broadcaster_user_id: broadcaster_user_id.clone(),
                 },
+                Subscription::Subscription {
+                    broadcaster_user_id: broadcaster_user_id.clone(),
+                },
             ],
         },
         options,
@@ -133,6 +136,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }
             };
         }));
+
+        tokio::spawn(
+            bot.on_event::<event::Subscription, _>(move |notif, bot| async move {
+                options.debug(format!(">> SUBSCRIPTION {notif:?}"));
+                bot.say(format!(
+                    "Thank you so much @{} for the sub!!! <3",
+                    notif.payload.event.user_name
+                ))
+                .await;
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }),
+        );
 
         if options.features.comet {
             // TODO: add options for port
@@ -201,7 +216,6 @@ fn run_comet_chat_manager(
         bot.on_chat_message_comet(comet_server, move |msg, bot, cmt| {
             let broadcaster_user_id = broadcaster_user_id.clone();
             async move {
-                println!("features: {:?}", cmt.get_features().await);
                 match cmt.get_features().await {
                     Some(features) if features.contains(&eye::comet::feature::Feature::Chat) => (),
                     _ => return,
