@@ -28,6 +28,13 @@ pub struct ChatterInfo {
     pub badges: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatMetadata {
+    None,
+    Action,
+}
+
 impl Sound {
     pub fn parse(input: &str) -> Vec<Vec<Sound>> {
         input
@@ -45,8 +52,13 @@ impl Sound {
 }
 
 impl Chat {
-    pub fn from_chat_message(chat_message: &crate::chat::data::ChatMessage) -> Vec<Chat> {
-        let text = &chat_message.text;
+    pub fn from_chat_message(
+        chat_message: &crate::chat::data::ChatMessage,
+    ) -> (Vec<Chat>, ChatMetadata) {
+        let (text, metadata) = match chat_message.try_get_action() {
+            Some(action) => (action, ChatMetadata::Action),
+            None => (chat_message.text.as_str(), ChatMetadata::None),
+        };
         let mut output = Vec::new();
         let mut current_chat = String::new();
 
@@ -83,6 +95,6 @@ impl Chat {
             });
         }
 
-        output
+        (output, metadata)
     }
 }

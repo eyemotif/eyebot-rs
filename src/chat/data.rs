@@ -66,6 +66,16 @@ impl ChatMessage {
             .collect()
     }
 
+    #[must_use]
+    pub fn try_get_action(&self) -> Option<&str> {
+        lazy_static::lazy_static! {
+            static ref PATTERN: regex::Regex = regex::Regex::new("\u{1}ACTION (.*)\u{1}").expect("Constant regex expression");
+        };
+        let captures = PATTERN.captures(&self.text);
+        dbg!(&self.text, &captures);
+        Some(captures?.get(1)?.as_str())
+    }
+
     pub async fn get_badges(
         &self,
         broadcaster_id: &str,

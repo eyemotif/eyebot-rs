@@ -221,12 +221,13 @@ fn run_comet_chat_manager(
                     _ => return,
                 }
 
-                let chat = eye::comet::component::Chat::from_chat_message(&msg);
+                let (chat, meta) = eye::comet::component::Chat::from_chat_message(&msg);
                 loop {
                     match cmt
                         .send_message(eye::comet::Message::Chat {
                             user_id: msg.user_id.clone(),
                             chat: chat.clone(),
+                            meta,
                         })
                         .await
                     {

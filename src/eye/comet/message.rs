@@ -27,6 +27,7 @@ pub enum Message {
     Chat {
         user_id: String,
         chat: Vec<component::Chat>,
+        meta: component::ChatMetadata,
     },
     ChatUser {
         user_id: String,
