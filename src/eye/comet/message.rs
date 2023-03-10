@@ -67,7 +67,10 @@ pub enum ResponseData {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(super) struct MessageTag(#[serde(with = "serde_arc_str")] pub(super) std::sync::Arc<String>);
+pub(super) struct MessageTag(
+    #[serde(with = "serde_arc_str")] pub(super) std::sync::Arc<String>,
+    #[serde(skip)] bool,
+);
 
 mod serde_arc_str {
     pub fn serialize<S: serde::Serializer>(
@@ -91,15 +94,24 @@ impl MessageTag {
             static ref RNG: ring::rand::SystemRandom = ring::rand::SystemRandom::new();
         );
 
-        Self(std::sync::Arc::new(loop {
-            let mut state = [0; 16];
-            match RNG.fill(&mut state) {
-                Ok(()) => break state.into_iter().map(|byte| format!("{byte:x?}")).collect(),
-                Err(_) => (),
-            };
-        }))
+        Self(
+            std::sync::Arc::new(loop {
+                let mut state = [0; 16];
+                match RNG.fill(&mut state) {
+                    Ok(()) => break state.into_iter().map(|byte| format!("{byte:x?}")).collect(),
+                    Err(_) => (),
+                };
+            }),
+            false,
+        )
+    }
+    pub(super) fn close() -> Self {
+        Self(std::sync::Arc::new(String::new()), true)
     }
     pub(super) fn clone(&self) -> Self {
-        MessageTag(self.0.clone())
+        MessageTag(self.0.clone(), self.1)
+    }
+    pub(super) fn is_close(&self) -> bool {
+        self.1
     }
 }

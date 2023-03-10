@@ -42,7 +42,7 @@ impl Feature {
             }
         }
 
-        *interface.get_features_mut().await = Some(features);
+        interface.set_features(features).await;
 
         Some(Ok(()))
     }

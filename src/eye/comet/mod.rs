@@ -69,7 +69,7 @@ impl Server {
         let (message_sender, message_receiver) = mpsc::channel(16);
         let (response_sender, response_receiver) = watch::channel(message::Response {
             state: String::new(),
-            tag: message::MessageTag(Arc::new(String::new())),
+            tag: message::MessageTag::close(),
             data: message::ResponseData::Ok,
         });
 
@@ -171,7 +171,7 @@ impl Server {
             let client = Arc::new(Client {
                 sender: Mutex::new(sender),
                 receiver: Mutex::new(receiver),
-                state,
+                state: state.clone(),
                 close_sender,
             });
 
@@ -185,6 +185,7 @@ impl Server {
                 self.interface.clone(),
                 self.options,
                 self.streamer_username.clone(),
+                state,
             ));
 
             match self.client.replace(client) {
@@ -215,12 +216,14 @@ impl Server {
         interface: CometInterface,
         options: crate::options::Options,
         streamer_username: String,
+        state: String,
     ) {
         tokio::join!(
             Server::client_ping(client.clone(), &task_name, error_reporter.clone(), options),
             Server::client_inbound(
                 client.clone(),
                 &task_name,
+                state,
                 error_reporter.clone(),
                 response_sender,
                 options
@@ -234,7 +237,6 @@ impl Server {
                 options
             ),
             Server::client_features(
-                client.clone(),
                 &task_name,
                 error_reporter.clone(),
                 options,
@@ -304,6 +306,7 @@ impl Server {
     async fn client_inbound(
         client: Weak<Client>,
         task_name: &str,
+        state: String,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         response_sender: Arc<watch::Sender<message::Response>>,
         options: crate::options::Options,
@@ -399,8 +402,8 @@ impl Server {
 
         // Flush any threads waiting on a response
         let _ = response_sender.send(Response {
-            state: String::from("CLOSE"),
-            tag: message::MessageTag(Arc::new(String::new())),
+            state,
+            tag: message::MessageTag::close(),
             data: ResponseData::Error {
                 is_internal: true,
                 message: String::from("This error should never be handled"),
@@ -458,30 +461,26 @@ impl Server {
     }
 
     async fn client_features(
-        client: Weak<Client>,
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         options: crate::options::Options,
         interface: CometInterface,
         streamer_username: String,
     ) {
-        let Some(client) = client.upgrade() else { return };
+        options.debug(format!("Comet ({task_name}): Initializing features..."));
 
         let Some(features) = feature::Feature::get_features(interface.clone())
-            .await else { return };
+            .await else { return; };
 
         match feature::Feature::init(interface.clone(), features.clone(), streamer_username)
             .await
             .expect("Client should be connected")
         {
-            Ok(()) => options.debug(format!(
-                "Comet ({}): Initialized client",
-                client.short_state()
-            )),
+            Ok(()) => (),
             Err(err) => {
                 let _ = error_reporter
                     .send(crate::bot::error::BotError::Custom(format!(
-                        "Error on initializing comet websocket connection: {err}"
+                        "Error on initializing comet features: {err}"
                     )))
                     .await;
                 return;

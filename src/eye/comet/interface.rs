@@ -37,14 +37,15 @@ impl CometInterface {
 
         async move {
             let (mut response_receiver, tag, state) =
-                Self::send_tagged_message(data, message).await;
+                Self::send_tagged_message(data, message).await?;
 
             while response_receiver.changed().await.is_ok() {
-                if response_receiver.borrow().state == "CLOSE" {
-                    break;
-                }
                 if response_receiver.borrow().state != state {
                     continue;
+                }
+
+                if response_receiver.borrow().tag.is_close() {
+                    break;
                 }
 
                 if response_receiver.borrow().tag.0 == tag.0 {
@@ -60,41 +61,27 @@ impl CometInterface {
     async fn send_tagged_message(
         data: Arc<RwLock<InterfaceData>>,
         message: Message,
-    ) -> (
+    ) -> Option<(
         watch::Receiver<super::message::Response>,
         MessageTag,
         String,
-    ) {
+    )> {
         let data = data.read().await;
-
         let tag = MessageTag::new();
+        let state = data.state.read().await.as_ref()?.clone();
 
-        let state = data
-            .state
-            .read()
-            .await
-            .as_ref()
-            .expect("Interface should have its state set")
-            .clone();
-
-        data.message_sender
-            .as_ref()
-            .expect("Comet server should be open")
+        let Ok(()) = data.message_sender
+            .as_ref()?
             .send(TaggedMessage {
                 tag: tag.clone(),
                 state: state.clone(),
                 message,
             })
-            .await
-            .expect("Comet server should be open");
+            .await else { return None; };
 
-        let response_receiver = data
-            .response_receiver
-            .as_ref()
-            .expect("Comet server should be open")
-            .clone();
+        let response_receiver = data.response_receiver.as_ref()?.clone();
 
-        (response_receiver, tag, state)
+        Some((response_receiver, tag, state))
     }
 
     #[must_use]
@@ -112,10 +99,8 @@ impl CometInterface {
         *interface.state.write().await = None;
     }
 
-    pub(super) async fn get_features_mut(
-        &self,
-    ) -> tokio::sync::RwLockMappedWriteGuard<'_, Option<HashSet<Feature>>> {
-        tokio::sync::RwLockWriteGuard::map(self.0.write().await, |inner| &mut inner.features)
+    pub(super) async fn set_features(&self, features: HashSet<Feature>) {
+        self.0.write().await.features = Some(features)
     }
     pub async fn get_features(&self) -> Option<HashSet<Feature>> {
         self.0.read().await.features.clone()
