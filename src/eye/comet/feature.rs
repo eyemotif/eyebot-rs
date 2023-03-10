@@ -11,6 +11,8 @@ pub enum Feature {
 
 impl Feature {
     pub async fn get_features(interface: CometInterface) -> Option<HashSet<Feature>> {
+        // FIXME: this deadlocks sometimes
+        // For some reason the async block never gets entered? I don't get it
         let response = interface.send_message(Message::Features {}).await?;
 
         match response {

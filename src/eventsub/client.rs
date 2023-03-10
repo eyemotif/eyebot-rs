@@ -167,10 +167,7 @@ impl EventsubClient {
                     };
                     self.session_id = welcome.payload.session.id;
 
-                    self.options.debug(format!(
-                        "Eventsub: Subscribing to events (session id: {})",
-                        self.session_id
-                    ));
+                    self.options.debug("Eventsub: Subscribing to events");
 
                     outbound::send_subscriptions(
                         &self.data.subscriptions,

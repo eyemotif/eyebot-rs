@@ -320,8 +320,6 @@ impl Server {
                 }
             }
         }
-
-        options.debug(format!("Comet ({task_name}): Outbound task closed"));
     }
 
     async fn client_inbound(
@@ -332,8 +330,6 @@ impl Server {
         response_sender: Arc<watch::Sender<message::Response>>,
         options: crate::options::Options,
     ) {
-        options.debug(format!("Comet ({task_name}): Accepting inbound messages!"));
-
         loop {
             let Some(client) = client.upgrade() else { break; };
 
@@ -424,7 +420,6 @@ impl Server {
                 }
             }; // semicolon is required for drop checker
         }
-        options.debug(format!("Comet ({task_name}): Inbound task closed"));
     }
 
     async fn client_ping(
@@ -438,7 +433,13 @@ impl Server {
 
         options.debug(format!("Comet ({task_name}): Starting ping task"));
         loop {
-            ping_interval.tick().await;
+            if wait_for(close_sender.subscribe(), ping_interval.tick())
+                .await
+                .is_none()
+            {
+                break;
+            }
+
             let Some(client) = client.upgrade() else { break; };
 
             let ping_data: Vec<u8> = std::time::SystemTime::now()
@@ -474,8 +475,6 @@ impl Server {
                 }
             }
         }
-
-        options.debug(format!("Comet ({task_name}): Ping task closed"));
     }
 
     async fn client_features(
@@ -490,6 +489,7 @@ impl Server {
 
         let Some(Some(features)) = wait_for(close_sender.subscribe(),feature::Feature::get_features(interface.clone())).await else { return; };
 
+        println!("* init {features:?}");
         match feature::Feature::init(interface.clone(), features.clone(), streamer_username)
             .await
             .expect("Client should be connected")
