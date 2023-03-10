@@ -1,7 +1,7 @@
 use futures_util::{SinkExt, StreamExt};
 use ring::rand::SecureRandom;
 use std::sync::{Arc, Weak};
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{broadcast, mpsc, watch, Mutex};
 use tokio_tungstenite::tungstenite::error::ProtocolError;
 use tokio_tungstenite::tungstenite::{Error as SocketError, Message as SocketMessage};
 
@@ -39,7 +39,7 @@ struct Client {
         >,
     >,
     state: String,
-    close_sender: mpsc::Sender<()>,
+    close_sender: broadcast::Sender<()>,
 }
 
 macro_rules! close_err {
@@ -49,6 +49,16 @@ macro_rules! close_err {
             | Err(SocketError::Protocol(ProtocolError::SendAfterClosing))
             | Err(SocketError::Protocol(ProtocolError::ReceivedAfterClosing))
     };
+}
+
+async fn wait_for<T, Fut: std::future::Future<Output = T>>(
+    mut close_receiver: broadcast::Receiver<()>,
+    fut: Fut,
+) -> Option<T> {
+    tokio::select! {
+        output = fut => Some(output),
+        _ = close_receiver.recv() => None,
+    }
 }
 
 impl Server {
@@ -167,12 +177,12 @@ impl Server {
             self.options
                 .debug(format!("Comet: Registered client (state: {state})"));
 
-            let (close_sender, close_receiver) = mpsc::channel(1);
+            let (close_sender, _) = broadcast::channel(1);
             let client = Arc::new(Client {
                 sender: Mutex::new(sender),
                 receiver: Mutex::new(receiver),
                 state: state.clone(),
-                close_sender,
+                close_sender: close_sender.clone(),
             });
 
             tokio::spawn(Server::handle_client(
@@ -181,11 +191,10 @@ impl Server {
                 self.error_reporter.clone(),
                 self.message_receiver.clone(),
                 self.response_sender.clone(),
-                close_receiver,
+                close_sender,
                 self.interface.clone(),
                 self.options,
                 self.streamer_username.clone(),
-                state,
             ));
 
             match self.client.replace(client) {
@@ -196,6 +205,16 @@ impl Server {
                         reason: "Server received new connection".into()
                     },
                     ))).await;
+
+                    // Flush any threads waiting on a response
+                    let _ = self.response_sender.send(Response {
+                        state: old_client.state.clone(),
+                        tag: message::MessageTag::close(),
+                        data: ResponseData::Error {
+                            is_internal: true,
+                            message: String::from("This error should never be handled"),
+                        },
+                    });
                 }
                 None => (),
             }
@@ -212,19 +231,24 @@ impl Server {
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
         message_receiver: Arc<Mutex<mpsc::Receiver<message::TaggedMessage>>>,
         response_sender: Arc<watch::Sender<message::Response>>,
-        close_receiver: mpsc::Receiver<()>,
+        close_sender: broadcast::Sender<()>,
         interface: CometInterface,
         options: crate::options::Options,
         streamer_username: String,
-        state: String,
     ) {
         tokio::join!(
-            Server::client_ping(client.clone(), &task_name, error_reporter.clone(), options),
+            Server::client_ping(
+                client.clone(),
+                &task_name,
+                error_reporter.clone(),
+                close_sender.clone(),
+                options
+            ),
             Server::client_inbound(
                 client.clone(),
                 &task_name,
-                state,
                 error_reporter.clone(),
+                close_sender.clone(),
                 response_sender,
                 options
             ),
@@ -232,13 +256,14 @@ impl Server {
                 client.clone(),
                 &task_name,
                 error_reporter.clone(),
+                close_sender.clone(),
                 message_receiver,
-                close_receiver,
                 options
             ),
             Server::client_features(
                 &task_name,
                 error_reporter.clone(),
+                close_sender.clone(),
                 options,
                 interface.clone(),
                 streamer_username,
@@ -254,18 +279,14 @@ impl Server {
         client: Weak<Client>,
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
+        close_sender: broadcast::Sender<()>,
         message_receiver: Arc<Mutex<mpsc::Receiver<message::TaggedMessage>>>,
-        mut close_receiver: mpsc::Receiver<()>,
         options: crate::options::Options,
     ) {
         options.debug(format!("Comet ({task_name}): Accepting outbound messages!"));
 
         loop {
-            let message = tokio::select! {
-                Some(message) = async { message_receiver.lock().await.recv().await } => message,
-                _ = close_receiver.recv() => break,
-                else => break,
-            };
+            let Some(Some(message)) = wait_for(close_sender.subscribe(), async {message_receiver.lock().await.recv().await}).await else {break};
 
             let Some(client) = client.upgrade() else { break; };
 
@@ -306,8 +327,8 @@ impl Server {
     async fn client_inbound(
         client: Weak<Client>,
         task_name: &str,
-        state: String,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
+        close_sender: broadcast::Sender<()>,
         response_sender: Arc<watch::Sender<message::Response>>,
         options: crate::options::Options,
     ) {
@@ -316,8 +337,12 @@ impl Server {
         loop {
             let Some(client) = client.upgrade() else { break; };
 
-            match client.receiver.lock().await.next().await {
-                Some(Ok(msg)) => match msg {
+            match wait_for(close_sender.subscribe(), async {
+                client.receiver.lock().await.next().await
+            })
+            .await
+            {
+                Some(Some(Ok(msg))) => match msg {
                     SocketMessage::Text(txt) => {
                         match serde_json::from_str::<message::Response>(&txt) {
                             Ok(response) => {
@@ -327,7 +352,7 @@ impl Server {
                                         reason: "Invalid state".into()
                                     }))).await;
 
-                                    let _ = client.close_sender.send(()).await;
+                                    let _ = client.close_sender.send(());
                                     break;
                                 }
 
@@ -344,7 +369,7 @@ impl Server {
                                         reason: format!("Malformed response: {err}").into()
                                     }))).await;
 
-                                let _ = client.close_sender.send(()).await;
+                                let _ = client.close_sender.send(());
                                 break;
                             }
                         }
@@ -371,12 +396,12 @@ impl Server {
                     }
                     SocketMessage::Close(_) => {
                         options.debug(format!("Comet ({task_name}): Client sent close message"));
-                        let _ = client.close_sender.send(()).await;
+                        let _ = client.close_sender.send(());
                         break;
                     }
                     _ => (),
                 },
-                Some(Err(err)) => {
+                Some(Some(Err(err))) => {
                     match err {
                         SocketError::ConnectionClosed
                         | SocketError::AlreadyClosed
@@ -390,25 +415,15 @@ impl Server {
                                 .await;
                         }
                     }
-                    let _ = client.close_sender.send(()).await;
+                    let _ = client.close_sender.send(());
                     break;
                 }
-                None => {
-                    let _ = client.close_sender.send(()).await;
+                _ => {
+                    let _ = client.close_sender.send(());
                     break;
                 }
             }; // semicolon is required for drop checker
         }
-
-        // Flush any threads waiting on a response
-        let _ = response_sender.send(Response {
-            state,
-            tag: message::MessageTag::close(),
-            data: ResponseData::Error {
-                is_internal: true,
-                message: String::from("This error should never be handled"),
-            },
-        });
         options.debug(format!("Comet ({task_name}): Inbound task closed"));
     }
 
@@ -416,6 +431,7 @@ impl Server {
         client: Weak<Client>,
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
+        close_sender: broadcast::Sender<()>,
         options: crate::options::Options,
     ) {
         let mut ping_interval = tokio::time::interval(std::time::Duration::from_secs(10));
@@ -432,17 +448,19 @@ impl Server {
                 .to_ne_bytes()
                 .to_vec();
 
-            let ping_result = client
-                .sender
-                .lock()
-                .await
-                .send(SocketMessage::Ping(ping_data))
-                .await;
+            let Some(ping_result) = wait_for(close_sender.subscribe(), async {
+                client
+                    .sender
+                    .lock()
+                    .await
+                    .send(SocketMessage::Ping(ping_data))
+                    .await
+            }).await else { break };
 
             match ping_result {
                 Ok(()) => (),
                 close_err!() => {
-                    let _ = client.close_sender.send(()).await;
+                    let _ = client.close_sender.send(());
                     break;
                 }
                 Err(err) => {
@@ -463,14 +481,14 @@ impl Server {
     async fn client_features(
         task_name: &str,
         error_reporter: mpsc::Sender<crate::bot::error::BotError>,
+        close_sender: broadcast::Sender<()>,
         options: crate::options::Options,
         interface: CometInterface,
         streamer_username: String,
     ) {
         options.debug(format!("Comet ({task_name}): Initializing features..."));
 
-        let Some(features) = feature::Feature::get_features(interface.clone())
-            .await else { return; };
+        let Some(Some(features)) = wait_for(close_sender.subscribe(),feature::Feature::get_features(interface.clone())).await else { return; };
 
         match feature::Feature::init(interface.clone(), features.clone(), streamer_username)
             .await
