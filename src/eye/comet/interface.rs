@@ -95,7 +95,7 @@ impl CometInterface {
     pub(super) async fn set_disconnected(&self) {
         let mut interface = self.0.write().await;
         interface.message_sender.take();
-        interface.response_receiver.take().map(|receiver| receiver);
+        interface.response_receiver.take();
         *interface.state.write().await = None;
     }
 

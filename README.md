@@ -107,8 +107,7 @@ using Twitch chat, with some built-in commands, all of which are *mod-only*:
   *matches the regex* `<pattern>`, the listener executes. Argument variables are
   set to the pattern's respective match groups.
 * `!listen:info <listener-name>`: Outputs a listener and its
-  [command](#custom-command-format) in its raw form, with its Pattern, Tags and Variables
-  spelled out.
+  [command](#custom-command-format) in its raw form, with its Pattern, Tags, and Variables spelled out.
 * `!listen:remove <listener-name>`: Removes a listener.
 * `!listen:list`: Lists all listeners' names.
 
@@ -119,7 +118,7 @@ backslash:
 
 ## disk interactions
 
-When any [custom commands], [counters], or [listeners] are in some way created,
+When any [custom commands](#custom-commands), [counters](#counters), or [listeners](#listeners) are in some way created,
 edited, or removed, a file on the disk is edited. Where these files are located
 is controlled by the `--store` flag, or `~/.eyebot-store/` by default. 
 

@@ -270,9 +270,8 @@ impl Server {
             ),
         );
 
-        //FIXME: deadlock occurs here
         interface.set_disconnected().await;
-        options.debug(format!("Comet ({task_name}): Client disconnected!"))
+        options.debug(format!("Comet ({task_name}): Client threads closed!"))
     }
 
     async fn client_outbound(
@@ -286,7 +285,11 @@ impl Server {
         options.debug(format!("Comet ({task_name}): Accepting outbound messages!"));
 
         loop {
-            let Some(Some(message)) = wait_for(close_sender.subscribe(), async {message_receiver.lock().await.recv().await}).await else {break};
+            // FIXME: for some reason message_receiver.recv returns `None` after
+            // second client here
+            let Some(message) = wait_for(close_sender.subscribe(), async {message_receiver.lock().await.recv().await}).await else {break};
+
+            let Some(message) = message else {break};
 
             let Some(client) = client.upgrade() else { break; };
 
@@ -320,6 +323,9 @@ impl Server {
                 }
             }
         }
+
+        let _ = close_sender.send(());
+        println!("~out {task_name}")
     }
 
     async fn client_inbound(
@@ -420,6 +426,8 @@ impl Server {
                 }
             }; // semicolon is required for drop checker
         }
+        let _ = close_sender.send(());
+        println!("~in {task_name}")
     }
 
     async fn client_ping(
@@ -475,6 +483,8 @@ impl Server {
                 }
             }
         }
+        let _ = close_sender.send(());
+        println!("~ping {task_name}")
     }
 
     async fn client_features(
@@ -487,7 +497,7 @@ impl Server {
     ) {
         options.debug(format!("Comet ({task_name}): Initializing features..."));
 
-        let Some(Some(features)) = wait_for(close_sender.subscribe(),feature::Feature::get_features(interface.clone())).await else { return; };
+        let Some(Some(features)) = wait_for(close_sender.subscribe(),feature::Feature::get_features(interface.clone())).await else { return };
 
         println!("* init {features:?}");
         match feature::Feature::init(interface.clone(), features.clone(), streamer_username)
@@ -507,7 +517,8 @@ impl Server {
 
         options.debug(format!(
             "Comet ({task_name}): Initialized features {features:?}"
-        ))
+        ));
+        println!("~init {task_name}");
     }
 
     fn create_state() -> Result<String, ring::error::Unspecified> {

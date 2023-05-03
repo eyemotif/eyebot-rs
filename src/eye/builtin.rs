@@ -517,7 +517,9 @@ pub fn register_comet_commands(
                         .await;
                     }
                 }
-            } else if let Some(body) = msg.text.strip_prefix("!comet:play-audio") {
+            }
+
+            if let Some(body) = msg.text.strip_prefix("!comet:play-audio") {
                 let mut sounds = super::comet::component::Sound::parse(body);
                 sounds.truncate(10);
 
@@ -591,7 +593,9 @@ pub fn register_comet_commands(
                     } else {
                         bot.reply(
                             &msg,
-                            format!("Command \"comet:volume\" expects a number as its 2nd argument, got {value:?}"),
+                            // cargo fmt doesn't format huge strings
+                            String::from("Command \"comet:volume\" expects a number ")
+                                + &format!("as its 2nd argument, got {value:?}"),
                         )
                         .await;
                     }
@@ -610,32 +614,32 @@ pub fn register_comet_commands(
                 )
                 .await;
             } else if msg.text.starts_with("!comet:clear-audio") {
-                let response = match cmt
-                            .send_message(comet::Message::AudioClear {  })
+                let response = match cmt.send_message(comet::Message::AudioClear {}).await {
+                    Some(it) => it,
+                    None => {
+                        data.read()
                             .await
-                        {
-                            Some(it) => it,
-                            None => {
-                                data.read()
-                                    .await
-                                    .options
-                                    .debug("Builtin: Comet client disconnected before response");
-                                return;
-                            }
-                        };
+                            .options
+                            .debug("Builtin: Comet client disconnected before response");
+                        return;
+                    }
+                };
                 match response {
                     comet::ResponseData::Ok => (),
                     comet::ResponseData::Data { .. } => unreachable!(),
-                    comet::ResponseData::Error { is_internal, message } => {
+                    comet::ResponseData::Error {
+                        is_internal,
+                        message,
+                    } => {
                         bot.reply(
-                                    &msg,
-                                    format!(
-                                        "{}Comet error: {message}",
-                                        if is_internal { "Internal " } else { "" }
-                                    ),
-                                )
-                                .await;
-                    },
+                            &msg,
+                            format!(
+                                "{}Comet error: {message}",
+                                if is_internal { "Internal " } else { "" }
+                            ),
+                        )
+                        .await;
+                    }
                 }
             }
         }
