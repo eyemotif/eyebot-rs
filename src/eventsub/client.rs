@@ -43,7 +43,7 @@ impl EventsubClient {
 
     async fn connect_websocket() -> tokio_tungstenite::tungstenite::Result<Websocket> {
         let (websocket, _) = tokio_tungstenite::connect_async_tls_with_config(
-            "wss://eventsub-beta.wss.twitch.tv/ws",
+            "wss://eventsub.wss.twitch.tv/ws",
             None,
             Some(tokio_tungstenite::Connector::Rustls(
                 super::tls::create_websocket_tls_client(),
