@@ -134,7 +134,7 @@ impl CommandRules {
                         *counter_value += 1;
                         io::spawn_io(data.clone(), io::refresh(data.clone()));
                     } else {
-                        bot.reply(&msg, format!("Error: Counter {name:?} not found."))
+                        bot.reply(msg, format!("Error: Counter {name:?} not found."))
                             .await;
                         return;
                     }
@@ -144,7 +144,7 @@ impl CommandRules {
                         *counter_value -= 1;
                         io::spawn_io(data.clone(), io::refresh(data.clone()));
                     } else {
-                        bot.reply(&msg, format!("Error: Counter {name:?} not found."))
+                        bot.reply(msg, format!("Error: Counter {name:?} not found."))
                             .await;
                         return;
                     }
@@ -154,7 +154,7 @@ impl CommandRules {
                         *counter_value = 0;
                         io::spawn_io(data.clone(), io::refresh(data.clone()));
                     } else {
-                        bot.reply(&msg, format!("Error: Counter {name:?} not found."))
+                        bot.reply(msg, format!("Error: Counter {name:?} not found."))
                             .await;
                         return;
                     }
@@ -197,7 +197,7 @@ impl CommandRules {
 
         match output_type {
             OutputType::Normal => bot.say(message).await,
-            OutputType::Reply => bot.reply(&msg, message).await,
+            OutputType::Reply => bot.reply(msg, message).await,
             OutputType::Alias => bot.mock_message(msg, message),
         }
     }

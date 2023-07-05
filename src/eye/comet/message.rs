@@ -77,7 +77,7 @@ mod serde_arc_str {
         arc: &std::sync::Arc<String>,
         ser: S,
     ) -> Result<S::Ok, S::Error> {
-        ser.serialize_str(&*arc)
+        ser.serialize_str(arc)
     }
     pub fn deserialize<'d, D: serde::Deserializer<'d>>(
         de: D,
@@ -97,10 +97,9 @@ impl MessageTag {
         Self(
             std::sync::Arc::new(loop {
                 let mut state = [0; 16];
-                match RNG.fill(&mut state) {
-                    Ok(()) => break state.into_iter().map(|byte| format!("{byte:x?}")).collect(),
-                    Err(_) => (),
-                };
+                if RNG.fill(&mut state).is_ok() {
+                    break state.into_iter().map(|byte| format!("{byte:x?}")).collect();
+                }
             }),
             false,
         )

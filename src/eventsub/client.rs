@@ -21,7 +21,6 @@ pub struct EventsubClient {
 }
 
 impl EventsubClient {
-    #[must_use]
     pub async fn new(
         data: EventsubClientData,
         options: crate::options::Options,
@@ -45,6 +44,7 @@ impl EventsubClient {
         let (websocket, _) = tokio_tungstenite::connect_async_tls_with_config(
             "wss://eventsub.wss.twitch.tv/ws",
             None,
+            true,
             Some(tokio_tungstenite::Connector::Rustls(
                 super::tls::create_websocket_tls_client(),
             )),

@@ -222,86 +222,83 @@ fn run_comet_chat_manager(
                 }
 
                 let (chat, meta) = eye::comet::component::Chat::from_chat_message(&msg);
-                loop {
-                    match cmt
-                        .send_message(eye::comet::Message::Chat {
-                            user_id: msg.user_id.clone(),
-                            chat: chat.clone(),
-                            meta,
-                        })
-                        .await
-                    {
-                        Some(response) => match response {
-                            eye::comet::ResponseData::Ok => break,
-                            eye::comet::ResponseData::Data { .. } => {
-                                let badges = match msg
-                                    .get_badges(&broadcaster_user_id.clone(), bot.helix_auth())
-                                    .await
-                                {
-                                    Ok(it) => it,
-                                    Err(err) => {
-                                        let _ = bot
-                                            .error(format!(
-                                                "Error getting a chat message's badges: {err}",
-                                            ))
-                                            .await;
-                                        return;
-                                    }
-                                };
+                while let Some(response) = cmt
+                    .send_message(eye::comet::Message::Chat {
+                        user_id: msg.user_id.clone(),
+                        chat: chat.clone(),
+                        meta,
+                    })
+                    .await
+                {
+                    match response {
+                        eye::comet::ResponseData::Ok => break,
+                        eye::comet::ResponseData::Data { .. } => {
+                            let badges = match msg
+                                .get_badges(&broadcaster_user_id.clone(), bot.helix_auth())
+                                .await
+                            {
+                                Ok(it) => it,
+                                Err(err) => {
+                                    let _ = bot
+                                        .error(format!(
+                                            "Error getting a chat message's badges: {err}",
+                                        ))
+                                        .await;
+                                    return;
+                                }
+                            };
 
-                                match cmt
-                                    .send_message(eye::comet::Message::ChatUser {
-                                        user_id: msg.user_id.clone(),
-                                        chat_info: eye::comet::component::ChatterInfo {
-                                            display_name: msg.display_name.clone(),
-                                            name_color: msg.name_color.clone().unwrap_or_else(
-                                                || crate::twitch::random_chatter_color(),
-                                            ),
-                                            badges: badges
-                                                .into_iter()
-                                                .map(|badges| badges.image_url_4x)
-                                                .collect(),
-                                        },
-                                    })
-                                    .await
-                                {
-                                    Some(eye::comet::ResponseData::Ok) => (),
-                                    Some(eye::comet::ResponseData::Data { .. }) => {
-                                        unreachable!()
-                                    }
-                                    Some(eye::comet::ResponseData::Error {
-                                        is_internal,
-                                        message,
-                                    }) => {
-                                        let _ = bot
-                                            .error(
-                                                format!(
+                            match cmt
+                                .send_message(eye::comet::Message::ChatUser {
+                                    user_id: msg.user_id.clone(),
+                                    chat_info: eye::comet::component::ChatterInfo {
+                                        display_name: msg.display_name.clone(),
+                                        name_color: msg.name_color.clone().unwrap_or_else(|| {
+                                            crate::twitch::random_chatter_color()
+                                        }),
+                                        badges: badges
+                                            .into_iter()
+                                            .map(|badges| badges.image_url_4x)
+                                            .collect(),
+                                    },
+                                })
+                                .await
+                            {
+                                Some(eye::comet::ResponseData::Ok) => (),
+                                Some(eye::comet::ResponseData::Data { .. }) => {
+                                    unreachable!()
+                                }
+                                Some(eye::comet::ResponseData::Error {
+                                    is_internal,
+                                    message,
+                                }) => {
+                                    let _ = bot
+                                        .error(
+                                            format!(
                                                 "{}Error sending a chat message to comet client: ",
                                                 if is_internal { "Internal " } else { "" }
                                             ) + &message,
-                                            )
-                                            .await;
-                                        return;
-                                    }
-                                    None => break,
+                                        )
+                                        .await;
+                                    return;
                                 }
+                                None => break,
                             }
-                            eye::comet::ResponseData::Error {
-                                is_internal,
-                                message,
-                            } => {
-                                let _ = bot
-                                    .error(
-                                        format!(
-                                            "{}Error sending a chat message to comet client: ",
-                                            if is_internal { "Internal " } else { "" }
-                                        ) + &message,
-                                    )
-                                    .await;
-                                return;
-                            }
-                        },
-                        None => break,
+                        }
+                        eye::comet::ResponseData::Error {
+                            is_internal,
+                            message,
+                        } => {
+                            let _ = bot
+                                .error(
+                                    format!(
+                                        "{}Error sending a chat message to comet client: ",
+                                        if is_internal { "Internal " } else { "" }
+                                    ) + &message,
+                                )
+                                .await;
+                            return;
+                        }
                     }
                 }
             }

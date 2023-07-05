@@ -28,7 +28,6 @@ impl CometInterface {
         })))
     }
 
-    #[must_use]
     pub fn send_message(
         &self,
         message: Message,

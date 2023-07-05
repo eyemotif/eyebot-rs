@@ -29,7 +29,6 @@ pub fn register_base_commands(
 
                 if msg.text.starts_with("!shutdown") {
                     bot.shutdown().await;
-                    return;
                 } else if msg.text.starts_with("!ping") {
                     bot.reply(&msg, "Pong!").await;
                 }
@@ -306,7 +305,7 @@ pub fn register_base_commands(
                     }
                 } else if let Some(name) = msg.text.strip_prefix("!listen:remove") {
                     let name = name.trim();
-                    if let Some(_) = data.write().await.listeners.remove(name) {
+                    if data.write().await.listeners.remove(name).is_some() {
                         io::spawn_io(data.clone(), io::refresh(data.clone()));
                     } else {
                         bot.reply(&msg, format!("Unknown listener {name}.")).await;
@@ -371,7 +370,7 @@ pub fn register_base_commands(
                     return;
                 }
 
-                for (_, listener) in &data.read().await.listeners {
+                for listener in data.read().await.listeners.values() {
                     listener.execute(&msg, &bot, data.clone()).await;
                 }
             }
@@ -667,7 +666,7 @@ pub fn register_comet_commands(
         let mut data = data.write().await;
         for builtin in ["get", "play-audio", "clear-audio", "ping", "volume"] {
             data.commands.insert(
-                String::from(format!("comet:{builtin}")),
+                format!("comet:{builtin}"),
                 Arc::new(super::command::CommandRules::empty_builtin(true)),
             );
         }

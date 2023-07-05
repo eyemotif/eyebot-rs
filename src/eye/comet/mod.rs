@@ -197,26 +197,23 @@ impl Server {
                 self.streamer_username.clone(),
             ));
 
-            match self.client.replace(client) {
-                Some(old_client) => {
-                    let _ = old_client.sender.lock().await.send(SocketMessage::Close(Some(
+            if let Some(old_client) = self.client.replace(client) {
+                let _ = old_client.sender.lock().await.send(SocketMessage::Close(Some(
                     tokio_tungstenite::tungstenite::protocol::CloseFrame {
                         code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                         reason: "Server received new connection".into()
                     },
                     ))).await;
 
-                    // Flush any threads waiting on a response
-                    let _ = self.response_sender.send(Response {
-                        state: old_client.state.clone(),
-                        tag: message::MessageTag::close(),
-                        data: ResponseData::Error {
-                            is_internal: true,
-                            message: String::from("This error should never be handled"),
-                        },
-                    });
-                }
-                None => (),
+                // Flush any threads waiting on a response
+                let _ = self.response_sender.send(Response {
+                    state: old_client.state.clone(),
+                    tag: message::MessageTag::close(),
+                    data: ResponseData::Error {
+                        is_internal: true,
+                        message: String::from("This error should never be handled"),
+                    },
+                });
             }
         }
     }
@@ -225,6 +222,7 @@ impl Server {
         self.interface.clone()
     }
 
+    // TODO: move these args into a struct
     async fn handle_client(
         client: Weak<Client>,
         task_name: String,

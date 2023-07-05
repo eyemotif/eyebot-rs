@@ -117,7 +117,7 @@ pub async fn get_global_badges(auth: &HelixAuth) -> Result<HashMap<String, Vec<T
         get_paginated_values("https://api.twitch.tv/helix/chat/badges/global", auth)
             .await?
             .into_iter()
-            .map(|value| serde_json::from_value::<BadgesResponse>(value))
+            .map(serde_json::from_value::<BadgesResponse>)
             .collect::<std::result::Result<Vec<_>, _>>()?
             .into_iter()
             .map(|response| (response.set_id, response.versions))
@@ -134,7 +134,7 @@ pub async fn get_channel_badges(
     )
     .await?
     .into_iter()
-    .map(|value| serde_json::from_value::<BadgesResponse>(value))
+    .map(serde_json::from_value::<BadgesResponse>)
     .collect::<std::result::Result<Vec<_>, _>>()?
     .into_iter()
     .map(|response| (response.set_id, response.versions))
@@ -158,9 +158,8 @@ pub fn random_chatter_color() -> String {
     );
     let mut color = [0u8; 3];
     loop {
-        match RNG.fill(&mut color) {
-            Ok(()) => break,
-            Err(_) => (),
+        if RNG.fill(&mut color).is_ok() {
+            break;
         }
     }
     format!("#{:02X}{:02X}{:02X}", color[0], color[1], color[2])

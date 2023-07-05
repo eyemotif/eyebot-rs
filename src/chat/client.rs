@@ -10,6 +10,7 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::watch;
 
+// TODO: use updated/maintained IRC library
 #[derive(Debug)]
 pub struct ChatClient {
     client: Arc<Client>,
